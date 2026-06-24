@@ -1,7 +1,41 @@
 import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
 import { SetlistMaker } from '@/features/setlist/components/SetlistMaker'
 
-export default function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const resolvedSearchParams = await searchParams
+  const params = new URLSearchParams()
+
+  for (const [key, value] of Object.entries(resolvedSearchParams)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        params.append(key, entry)
+      }
+      continue
+    }
+
+    if (typeof value === 'string') {
+      params.set(key, value)
+    }
+  }
+
+  const hasLegacySetlistQuery = [
+    'songs',
+    'encoreAfters',
+    'encoreAfter',
+    'eventId',
+    'eventName',
+    'shared',
+  ].some((key) => params.has(key))
+
+  if (hasLegacySetlistQuery) {
+    redirect('/home')
+  }
+
   return (
     <Suspense
       fallback={

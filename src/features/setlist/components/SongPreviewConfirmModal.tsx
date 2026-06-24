@@ -9,6 +9,7 @@ type SongPreviewConfirmModalProps = {
   isOpen: boolean;
   onBack: () => void;
   onConfirm: () => void;
+  readOnly?: boolean;
   song: Song | null;
   title: string;
 };
@@ -19,6 +20,7 @@ export function SongPreviewConfirmModal({
   isOpen,
   onBack,
   onConfirm,
+  readOnly = false,
   song,
   title,
 }: SongPreviewConfirmModalProps) {
@@ -37,10 +39,10 @@ export function SongPreviewConfirmModal({
 
           <div className="relative z-10 border-b-4 border-black bg-white px-4 pb-4 pt-6 sm:px-8">
             <p className="text-[11px] font-black tracking-[0.28em] text-rose-600">
-              JACKET CHECK
+              {readOnly ? "SONG PREVIEW" : "JACKET CHECK"}
             </p>
             <h2 className="mt-1 text-3xl font-black uppercase tracking-[0.06em] text-zinc-950 sm:text-5xl">
-              Confirm
+              {readOnly ? "Listen" : "Confirm"}
             </h2>
           </div>
 
@@ -83,25 +85,29 @@ export function SongPreviewConfirmModal({
               <p className="mt-5 border-l-4 border-rose-600 pl-3 text-sm font-bold tracking-[0.12em] text-zinc-600">
                 {isLoading
                   ? "ジャケット情報を読み込み中..."
-                  : coverUrl
+                  : readOnly
+                    ? "この画面では曲のプレビュー再生のみ利用できます。"
+                    : coverUrl
                     ? "この曲を現在のスロットに反映します。"
                     : "ジャケット画像が見つからないため、プレースホルダーを表示しています。"}
               </p>
 
-              <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  className="h-12 border-2 border-black bg-black px-4 text-sm font-black tracking-[0.18em] text-white shadow-[6px_6px_0_#e11d48] transition hover:bg-rose-600"
-                  onClick={onConfirm}
-                >
-                  選択する
-                </button>
+              <div className={`mt-8 grid gap-3 ${readOnly ? "" : "sm:grid-cols-2"}`}>
+                {readOnly ? null : (
+                  <button
+                    type="button"
+                    className="h-12 border-2 border-black bg-black px-4 text-sm font-black tracking-[0.18em] text-white shadow-[6px_6px_0_#e11d48] transition hover:bg-rose-600"
+                    onClick={onConfirm}
+                  >
+                    選択する
+                  </button>
+                )}
                 <button
                   type="button"
                   className="h-12 border-2 border-black bg-white px-4 text-sm font-black tracking-[0.18em] text-zinc-950 shadow-[6px_6px_0_#111] transition hover:bg-zinc-100"
                   onClick={onBack}
                 >
-                  戻る
+                  {readOnly ? "閉じる" : "戻る"}
                 </button>
               </div>
             </div>

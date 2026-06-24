@@ -18,19 +18,7 @@ export type Song = {
   sortOrder?: number
 }
 
-export type FutureEvent = {
-  id: string
-  name: string
-  date: string
-  venue: string
-  series: LoveLiveSeries | '合同'
-}
-
 export type SetlistPrediction = {
-  event: {
-    id: string
-    name: string
-  }
   songIds: string[]
-  encoreAfter: number | null
+  encoreAfters: number[]
 }

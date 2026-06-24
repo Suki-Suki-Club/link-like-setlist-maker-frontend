@@ -6,6 +6,7 @@ import { SongMeta } from "./SongMeta";
 type SongPickerOverlayProps = {
   activeSlotIndex: number | null;
   errorMessage: string;
+  onBeginSongConfirm: (songId: string) => void;
   isLoading: boolean;
   isOpen: boolean;
   keyword: string;
@@ -26,6 +27,7 @@ export function SongPickerOverlay({
   isLoading,
   isOpen,
   keyword,
+  onBeginSongConfirm,
   onClose,
   onOpenSongConfirm,
   onHoverSongEnd,
@@ -117,8 +119,18 @@ export function SongPickerOverlay({
                   onBlur={() => onHoverSongEnd(song.id)}
                   onClick={() => onOpenSongConfirm(song.id)}
                   onFocus={() => onHoverSongStart(song.id)}
-                  onMouseEnter={() => onHoverSongStart(song.id)}
-                  onMouseLeave={() => onHoverSongEnd(song.id)}
+                  onPointerCancel={() => onHoverSongEnd(song.id)}
+                  onPointerDown={(event) => {
+                    onBeginSongConfirm(song.id)
+
+                    // Touch devices do not emit hover events, so start preview work
+                    // while the pointer gesture is still active.
+                    if (event.pointerType !== "mouse") {
+                      onHoverSongStart(song.id)
+                    }
+                  }}
+                  onPointerEnter={() => onHoverSongStart(song.id)}
+                  onPointerLeave={() => onHoverSongEnd(song.id)}
                 >
                   <span className="absolute inset-y-0 left-0 w-2 bg-black transition-all duration-200 group-hover/song:w-4" />
                   <span className="absolute -right-8 top-0 h-full w-12 skew-x-[-18deg] bg-black" />
