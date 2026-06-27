@@ -30,6 +30,7 @@ export function createSetlistSavePayload(
 ) {
   return {
     description: JSON.stringify({
+      breaks: prediction.breaks,
       encoreAfters: prediction.encoreAfters,
     }),
     items: prediction.songIds.map((songId, index) => ({

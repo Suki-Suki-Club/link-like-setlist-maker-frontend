@@ -63,3 +63,67 @@ test("inactive preview audio is not reused for a repeated song request", () => {
     false,
   );
 });
+
+test("preview refresh keeps an existing cover when the new response has none", () => {
+  const { mergeCachedSongPreview } = loadSongPreviewControllerModule();
+
+  assert.deepEqual(
+    {
+      ...mergeCachedSongPreview(
+        {
+          cachedAt: 100,
+          coverUrl: "https://example.com/cover.jpg",
+          previewUrl: "https://example.com/preview.mp3",
+          status: "found",
+          title: "Cached title",
+        },
+        {
+          cachedAt: 200,
+          coverUrl: null,
+          previewUrl: null,
+          status: "not_found",
+          title: "Refresh title",
+        },
+      ),
+    },
+    {
+      cachedAt: 200,
+      coverUrl: "https://example.com/cover.jpg",
+      previewUrl: "https://example.com/preview.mp3",
+      status: "found",
+      title: "Refresh title",
+    },
+  );
+});
+
+test("preview refresh uses newer media URLs when present", () => {
+  const { mergeCachedSongPreview } = loadSongPreviewControllerModule();
+
+  assert.deepEqual(
+    {
+      ...mergeCachedSongPreview(
+        {
+          cachedAt: 100,
+          coverUrl: "https://example.com/old-cover.jpg",
+          previewUrl: "https://example.com/old-preview.mp3",
+          status: "found",
+          title: "Cached title",
+        },
+        {
+          cachedAt: 200,
+          coverUrl: "https://example.com/new-cover.jpg",
+          previewUrl: "https://example.com/new-preview.mp3",
+          status: "found",
+          title: "Refresh title",
+        },
+      ),
+    },
+    {
+      cachedAt: 200,
+      coverUrl: "https://example.com/new-cover.jpg",
+      previewUrl: "https://example.com/new-preview.mp3",
+      status: "found",
+      title: "Refresh title",
+    },
+  );
+});

@@ -1,8 +1,14 @@
 "use client";
 
-import type { LoveLiveSeries, Song } from "../types";
+import { useState, type DragEvent } from "react";
+import type {
+  LoveLiveSeries,
+  SetlistBreak,
+  SetlistBreakType,
+  Song,
+} from "../types";
 import type { SetlistSlot } from "../hooks/useSetlistEditor";
-import { EncoreControl } from "./EncoreControl";
+import { SetlistBreakControl } from "./SetlistBreakControl";
 import { SetlistSlotRow } from "./SetlistSlotRow";
 import { SongPickerOverlay } from "./SongPickerOverlay";
 import { SongPreviewConfirmModal } from "./SongPreviewConfirmModal";
@@ -16,9 +22,10 @@ type SongSelectStepPanelProps = {
   isSongPickerOpen: boolean;
   isSongsLoading: boolean;
   keyword: string;
+  coverUrlBySongId: Record<string, string | null>;
   onBackToGroup: () => void;
   onBeginSongConfirm: (songId: string) => void;
-  onClearEncore: (index: number) => void;
+  onClearSetlistBreak: (index: number) => void;
   onClearSetlist: () => void;
   onCloseSongPicker: () => void;
   onCloseSongPreviewConfirm: () => void;
@@ -30,8 +37,9 @@ type SongSelectStepPanelProps = {
   onMoveSong: (index: number, direction: -1 | 1) => void;
   onOpenSongConfirm: (songId: string) => void;
   onOpenSongPicker: (slotIndex: number) => void;
-  onPlaceEncore: (index: number) => void;
+  onPlaceSetlistBreak: (index: number, type: SetlistBreakType) => void;
   onRemoveSong: (index: number) => void;
+  onReorderSong: (fromIndex: number, toIndex: number) => void;
   onUnitChange: (value: string) => void;
   previewCoverUrl: string | null;
   previewSong: Song | null;
@@ -43,6 +51,7 @@ type SongSelectStepPanelProps = {
   songCount: number;
   unitOptions: string[];
   visibleEncoreAfters: number[];
+  visibleSetlistBreaks: SetlistBreak[];
 };
 
 export function SongSelectStepPanel({
@@ -54,9 +63,10 @@ export function SongSelectStepPanel({
   isSongPickerOpen,
   isSongsLoading,
   keyword,
+  coverUrlBySongId,
   onBackToGroup,
   onBeginSongConfirm,
-  onClearEncore,
+  onClearSetlistBreak,
   onClearSetlist,
   onCloseSongPicker,
   onCloseSongPreviewConfirm,
@@ -68,8 +78,9 @@ export function SongSelectStepPanel({
   onMoveSong,
   onOpenSongConfirm,
   onOpenSongPicker,
-  onPlaceEncore,
+  onPlaceSetlistBreak,
   onRemoveSong,
+  onReorderSong,
   onUnitChange,
   previewCoverUrl,
   previewSong,
@@ -81,7 +92,49 @@ export function SongSelectStepPanel({
   songCount,
   unitOptions,
   visibleEncoreAfters,
+  visibleSetlistBreaks,
 }: SongSelectStepPanelProps) {
+  const [draggedSongIndex, setDraggedSongIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+
+  function resetSongDrag() {
+    setDraggedSongIndex(null);
+    setDropTargetIndex(null);
+  }
+
+  function startSongDrag(
+    event: DragEvent<HTMLButtonElement>,
+    slotIndex: number,
+  ) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(slotIndex));
+    setDraggedSongIndex(slotIndex);
+    setDropTargetIndex(null);
+  }
+
+  function dragSongOver(
+    event: DragEvent<HTMLButtonElement>,
+    slotIndex: number,
+  ) {
+    if (draggedSongIndex === null || draggedSongIndex === slotIndex) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropTargetIndex(slotIndex);
+  }
+
+  function dropSong(event: DragEvent<HTMLButtonElement>, slotIndex: number) {
+    event.preventDefault();
+
+    if (draggedSongIndex !== null && draggedSongIndex !== slotIndex) {
+      onReorderSong(draggedSongIndex, slotIndex);
+    }
+
+    resetSongDrag();
+  }
+
   return (
     <>
       <section className="relative overflow-hidden border-4 border-black bg-white shadow-[14px_14px_0_#111]">
@@ -149,7 +202,12 @@ export function SongSelectStepPanel({
                   className="space-y-3"
                 >
                   <SetlistSlotRow
+                    coverUrl={
+                      slot.song ? (coverUrlBySongId[slot.song.id] ?? null) : null
+                    }
                     index={slot.index}
+                    isDragging={draggedSongIndex === slot.index}
+                    isDropTarget={dropTargetIndex === slot.index}
                     song={slot.song}
                     canMoveDown={slot.index < selectedSongsCount - 1}
                     canMoveUp={slot.index > 0 && slot.song !== null}
@@ -169,13 +227,35 @@ export function SongSelectStepPanel({
                         ? undefined
                         : () => onRemoveSong(slot.index)
                     }
+                    onSongDragEnd={resetSongDrag}
+                    onSongDragLeave={() => {
+                      if (dropTargetIndex === slot.index) {
+                        setDropTargetIndex(null);
+                      }
+                    }}
+                    onSongDragOver={
+                      slot.song === null
+                        ? undefined
+                        : (event) => dragSongOver(event, slot.index)
+                    }
+                    onSongDragStart={
+                      slot.song === null
+                        ? undefined
+                        : (event) => startSongDrag(event, slot.index)
+                    }
+                    onSongDrop={
+                      slot.song === null
+                        ? undefined
+                        : (event) => dropSong(event, slot.index)
+                    }
                   />
                   {slot.song ? (
-                    <EncoreControl
+                    <SetlistBreakControl
                       index={slot.index}
-                      onClear={onClearEncore}
-                      onPlace={onPlaceEncore}
+                      onClear={onClearSetlistBreak}
+                      onPlace={onPlaceSetlistBreak}
                       songCount={songCount}
+                      visibleBreaks={visibleSetlistBreaks}
                       visibleEncoreAfters={visibleEncoreAfters}
                     />
                   ) : null}
@@ -188,6 +268,7 @@ export function SongSelectStepPanel({
 
       <SongPickerOverlay
         activeSlotIndex={activeSlotIndex}
+        coverUrlBySongId={coverUrlBySongId}
         errorMessage={errorMessage}
         isLoading={isSongsLoading}
         isOpen={isSongPickerOpen}

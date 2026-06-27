@@ -44,6 +44,7 @@ type SongPreviewRequestOptions = {
 
 type UseSongPreviewControllerOptions = {
   canPlaySound: boolean;
+  prefetchPreviews: boolean;
   songMap: Map<string, Song>;
   soundVolume: number;
   songs: Song[];
@@ -62,8 +63,28 @@ export function shouldReuseActivePreviewAudio(
   );
 }
 
+export function mergeCachedSongPreview(
+  current: CachedSongPreview | null | undefined,
+  next: CachedSongPreview,
+) {
+  const coverUrl = next.coverUrl ?? current?.coverUrl ?? null;
+  const previewUrl = next.previewUrl ?? current?.previewUrl ?? null;
+  const status =
+    next.status === "found" || !current || (!coverUrl && !previewUrl)
+      ? next.status
+      : current.status;
+
+  return {
+    ...next,
+    coverUrl,
+    previewUrl,
+    status,
+  } satisfies CachedSongPreview;
+}
+
 export function useSongPreviewController({
   canPlaySound,
+  prefetchPreviews,
   songMap,
   soundVolume,
   songs,
@@ -84,6 +105,7 @@ export function useSongPreviewController({
   const pendingPreviewConfirmSongIdRef = useRef<string | null>(null);
   const canPlaySoundRef = useRef(canPlaySound);
   const soundVolumeRef = useRef(soundVolume);
+  const prefetchPreviewRequestSongIdsRef = useRef<Set<string>>(new Set());
   const previewRequestMapRef = useRef<
     Map<string, Promise<SongPreviewRequestResult>>
   >(new Map());
@@ -91,17 +113,20 @@ export function useSongPreviewController({
   soundVolumeRef.current = soundVolume;
 
   const prefetchSongPreview = useEffectEvent((songId: string) =>
-    fetchSongPreviewAndCache(songId),
+    loadSongPreviewForDisplay(songId),
   );
 
   useEffect(() => {
-    if (songs.length === 0) {
+    if (!prefetchPreviews || songs.length === 0) {
       return;
     }
 
     const missingPreviewSongIds = songs
       .map((song) => song.id)
-      .filter((songId) => !previewBySongId[songId] && !getCachedPreview(songId));
+      .filter((songId) => {
+        const preview = previewBySongId[songId] ?? getCachedPreview(songId);
+        return !preview?.coverUrl || !preview.previewUrl;
+      });
 
     if (missingPreviewSongIds.length === 0) {
       return;
@@ -110,7 +135,7 @@ export function useSongPreviewController({
     void Promise.allSettled(
       missingPreviewSongIds.map((songId) => prefetchSongPreview(songId)),
     );
-  }, [previewBySongId, songs]);
+  }, [prefetchPreviews, previewBySongId, songs]);
 
   const selectedPreviewSong = useMemo(
     () =>
@@ -135,12 +160,15 @@ export function useSongPreviewController({
   }
 
   function cachePreview(songId: string, preview: CachedSongPreview) {
+    const existingPreview = previewBySongId[songId] ?? getCachedPreview(songId);
+    const nextPreview = mergeCachedSongPreview(existingPreview, preview);
+
     setPreviewBySongId((current) => ({
       ...current,
-      [songId]: preview,
+      [songId]: mergeCachedSongPreview(current[songId], nextPreview),
     }));
-    setCachedPreview(songId, preview);
-    return preview;
+    setCachedPreview(songId, nextPreview);
+    return nextPreview;
   }
 
   function hydrateCachedPreview(songId: string) {
@@ -275,6 +303,27 @@ export function useSongPreviewController({
     }
   }
 
+  function loadSongPreviewForDisplay(songId: string) {
+    const cachedPreview = previewBySongId[songId] ?? getCachedPreview(songId);
+
+    if (cachedPreview?.coverUrl && cachedPreview.previewUrl) {
+      hydrateCachedPreview(songId);
+      return;
+    }
+
+    if (prefetchPreviewRequestSongIdsRef.current.has(songId)) {
+      return;
+    }
+
+    prefetchPreviewRequestSongIdsRef.current.add(songId);
+    void requestSongPreview(songId, {
+      backgroundRefresh: Boolean(cachedPreview),
+      forceRefresh: Boolean(
+        cachedPreview && (!cachedPreview.coverUrl || !cachedPreview.previewUrl),
+      ),
+    });
+  }
+
   function stopPreviewAudio() {
     const audio = previewAudioRef.current;
 
@@ -392,6 +441,8 @@ export function useSongPreviewController({
   }
 
   async function playSongHoverPreview(songId: string) {
+    loadSongPreviewForDisplay(songId);
+
     const audio = previewAudioRef.current;
 
     if (
@@ -524,6 +575,7 @@ export function useSongPreviewController({
     playSongPreviewAudio,
     playSongHoverPreview,
     resetPreviewInteraction,
+    previewBySongId,
     selectedPreview,
     selectedPreviewSong,
     selectedPreviewSongId,

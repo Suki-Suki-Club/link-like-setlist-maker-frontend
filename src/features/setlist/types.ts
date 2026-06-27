@@ -18,7 +18,15 @@ export type Song = {
   sortOrder?: number
 }
 
+export type SetlistBreakType = "encore" | "mc" | "interlude"
+
+export type SetlistBreak = {
+  after: number
+  type: SetlistBreakType
+}
+
 export type SetlistPrediction = {
   songIds: string[]
   encoreAfters: number[]
+  breaks: SetlistBreak[]
 }

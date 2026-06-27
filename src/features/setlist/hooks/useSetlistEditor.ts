@@ -15,11 +15,19 @@ import {
   writeStoredSetlistDraft,
   type SetlistDraft,
 } from "../setlist-draft";
-import type { LoveLiveSeries, SetlistPrediction, Song } from "../types";
+import type {
+  LoveLiveSeries,
+  SetlistBreak,
+  SetlistBreakType,
+  SetlistPrediction,
+  Song,
+} from "../types";
 import {
-  getValidEncoreAfters,
+  getEncoreAftersFromBreaks,
+  getValidSetlistBreaks,
   isGroupSelectable,
   normalizeText,
+  reorderItems,
 } from "../utils";
 
 export type SetlistSlot = {
@@ -49,7 +57,7 @@ export function useSetlistEditor({
   const [selectedUnit, setSelectedUnit] = useState(ALL_UNITS_OPTION);
   const [keyword, setKeyword] = useState("");
   const [songIds, setSongIds] = useState<string[]>([]);
-  const [encoreAfters, setEncoreAfters] = useState<number[]>([]);
+  const [setlistBreaks, setSetlistBreaks] = useState<SetlistBreak[]>([]);
   const [isSongPickerOpen, setIsSongPickerOpen] = useState(false);
   const [activeSlotIndex, setActiveSlotIndex] = useState<number | null>(null);
   const hasRestoredDraftRef = useRef(false);
@@ -63,7 +71,7 @@ export function useSetlistEditor({
     setSelectedUnit(ALL_UNITS_OPTION);
     setKeyword("");
     setSongIds(draft.songIds);
-    setEncoreAfters(draft.encoreAfters);
+    setSetlistBreaks(draft.breaks);
     setIsSongPickerOpen(false);
     setActiveSlotIndex(null);
     onDraftRestored?.(draft);
@@ -125,21 +133,27 @@ export function useSetlistEditor({
   );
 
   const prediction = useMemo<SetlistPrediction>(
-    () => ({
-      songIds,
-      encoreAfters: getValidEncoreAfters(encoreAfters, songIds.length),
-    }),
-    [encoreAfters, songIds],
+    () => {
+      const breaks = getValidSetlistBreaks(setlistBreaks, songIds.length);
+
+      return {
+        songIds,
+        breaks,
+        encoreAfters: getEncoreAftersFromBreaks(breaks),
+      };
+    },
+    [setlistBreaks, songIds],
   );
 
   const visibleEncoreAfters = prediction.encoreAfters;
+  const visibleSetlistBreaks = prediction.breaks;
   const canConfirmGroupSelection =
     pendingGroup !== null && isGroupSelectable(pendingGroup);
 
   function saveDraft(
     nextSelectedGroup: LoveLiveSeries | null,
     nextSongIds: string[],
-    nextEncoreAfters: number[],
+    nextSetlistBreaks: SetlistBreak[],
   ) {
     if (!enableDraftStorage) {
       return;
@@ -148,7 +162,10 @@ export function useSetlistEditor({
     writeStoredSetlistDraft({
       selectedGroup: nextSelectedGroup,
       songIds: nextSongIds,
-      encoreAfters: nextEncoreAfters,
+      breaks: nextSetlistBreaks,
+      encoreAfters: getEncoreAftersFromBreaks(
+        getValidSetlistBreaks(nextSetlistBreaks, nextSongIds.length),
+      ),
     });
   }
 
@@ -196,7 +213,7 @@ export function useSetlistEditor({
     setKeyword("");
     setIsSongPickerOpen(false);
     setActiveSlotIndex(null);
-    saveDraft(group, songIds, encoreAfters);
+    saveDraft(group, songIds, setlistBreaks);
     onDirty();
   }
 
@@ -223,7 +240,7 @@ export function useSetlistEditor({
           );
 
     setSongIds(nextSongIds);
-    saveDraft(selectedGroup, nextSongIds, encoreAfters);
+    saveDraft(selectedGroup, nextSongIds, setlistBreaks);
     onDirty();
     closeSongPicker();
   }
@@ -232,79 +249,108 @@ export function useSetlistEditor({
     const nextSongIds = songIds.filter(
       (_, currentIndex) => currentIndex !== index,
     );
-    const nextEncoreAfters = getValidEncoreAfters(
-      encoreAfters
+    const nextSetlistBreaks = getValidSetlistBreaks(
+      setlistBreaks
         .filter(
-          (encoreAfter) => index !== encoreAfter && index !== encoreAfter + 1,
+          (breakItem) =>
+            index !== breakItem.after && index !== breakItem.after + 1,
         )
-        .map((encoreAfter) =>
-          index < encoreAfter ? encoreAfter - 1 : encoreAfter,
-        ),
+        .map((breakItem) => ({
+          ...breakItem,
+          after: index < breakItem.after ? breakItem.after - 1 : breakItem.after,
+        })),
       nextSongIds.length,
     );
 
     setSongIds(nextSongIds);
-    setEncoreAfters(nextEncoreAfters);
-    saveDraft(selectedGroup, nextSongIds, nextEncoreAfters);
+    setSetlistBreaks(nextSetlistBreaks);
+    saveDraft(selectedGroup, nextSongIds, nextSetlistBreaks);
+    onDirty();
+  }
+
+  function placeSetlistBreakAfter(index: number, type: SetlistBreakType) {
+    const [nextBreak] = getValidSetlistBreaks(
+      [{ after: index, type }],
+      songIds.length,
+    );
+
+    if (!nextBreak) {
+      return;
+    }
+
+    const currentBreak = visibleSetlistBreaks.find(
+      (breakItem) => breakItem.after === nextBreak.after,
+    );
+
+    if (currentBreak?.type === nextBreak.type) {
+      return;
+    }
+
+    if (
+      nextBreak.type === "encore" &&
+      currentBreak?.type !== "encore" &&
+      visibleEncoreAfters.length >= 2
+    ) {
+      return;
+    }
+
+    const nextSetlistBreaks = getValidSetlistBreaks(
+      [
+        ...setlistBreaks.filter(
+          (breakItem) => breakItem.after !== nextBreak.after,
+        ),
+        nextBreak,
+      ],
+      songIds.length,
+    );
+
+    setSetlistBreaks(nextSetlistBreaks);
+    saveDraft(selectedGroup, songIds, nextSetlistBreaks);
     onDirty();
   }
 
   function placeEncoreAfter(index: number) {
-    const [nextEncoreAfter] = getValidEncoreAfters([index], songIds.length);
+    placeSetlistBreakAfter(index, "encore");
+  }
 
-    if (nextEncoreAfter === undefined) {
+  function clearSetlistBreak(index: number) {
+    if (!visibleSetlistBreaks.some((breakItem) => breakItem.after === index)) {
       return;
     }
 
-    if (encoreAfters.includes(nextEncoreAfter)) {
-      return;
-    }
-
-    const nextEncoreAfters = getValidEncoreAfters(
-      [...encoreAfters, nextEncoreAfter],
+    const nextSetlistBreaks = getValidSetlistBreaks(
+      setlistBreaks.filter((breakItem) => breakItem.after !== index),
       songIds.length,
     );
 
-    setEncoreAfters(nextEncoreAfters);
-    saveDraft(selectedGroup, songIds, nextEncoreAfters);
+    setSetlistBreaks(nextSetlistBreaks);
+    saveDraft(selectedGroup, songIds, nextSetlistBreaks);
     onDirty();
   }
 
   function clearEncore(index: number) {
-    if (!encoreAfters.includes(index)) {
-      return;
-    }
-
-    const nextEncoreAfters = getValidEncoreAfters(
-      encoreAfters.filter((encoreAfter) => encoreAfter !== index),
-      songIds.length,
-    );
-
-    setEncoreAfters(nextEncoreAfters);
-    saveDraft(selectedGroup, songIds, nextEncoreAfters);
-    onDirty();
+    clearSetlistBreak(index);
   }
 
   function moveSong(index: number, direction: -1 | 1) {
-    const nextIndex = index + direction;
+    reorderSong(index, index + direction);
+  }
 
-    if (nextIndex < 0 || nextIndex >= songIds.length) {
+  function reorderSong(fromIndex: number, toIndex: number) {
+    const nextSongIds = reorderItems(songIds, fromIndex, toIndex);
+
+    if (nextSongIds === songIds) {
       return;
     }
 
-    const nextSongIds = [...songIds];
-    const target = nextSongIds[index];
-    nextSongIds[index] = nextSongIds[nextIndex];
-    nextSongIds[nextIndex] = target;
-
     setSongIds(nextSongIds);
-    saveDraft(selectedGroup, nextSongIds, encoreAfters);
+    saveDraft(selectedGroup, nextSongIds, setlistBreaks);
     onDirty();
   }
 
   function clearSetlist() {
     setSongIds([]);
-    setEncoreAfters([]);
+    setSetlistBreaks([]);
     closeSongPicker();
     if (enableDraftStorage) {
       removeStoredSetlistDraft();
@@ -312,11 +358,16 @@ export function useSetlistEditor({
     onDirty();
   }
 
-  function applySharedSetlist(nextSongIds: string[], nextEncoreAfters: number[]) {
+  function applySharedSetlist(
+    nextSongIds: string[],
+    nextSetlistBreaks: SetlistBreak[],
+  ) {
     const firstSong = songMap.get(nextSongIds[0] ?? "");
 
     setSongIds(nextSongIds);
-    setEncoreAfters(getValidEncoreAfters(nextEncoreAfters, nextSongIds.length));
+    setSetlistBreaks(
+      getValidSetlistBreaks(nextSetlistBreaks, nextSongIds.length),
+    );
     if (firstSong) {
       setSelectedGroup(firstSong.series);
       setPendingGroup(
@@ -332,9 +383,10 @@ export function useSetlistEditor({
     canConfirmGroupSelection,
     chooseGroup,
     clearEncore,
+    clearSetlistBreak,
     clearSetlist,
     closeSongPicker,
-    encoreAfters,
+    encoreAfters: visibleEncoreAfters,
     filteredSongs,
     isSongPickerOpen,
     keyword,
@@ -343,8 +395,10 @@ export function useSetlistEditor({
     openSongPicker,
     pendingGroup,
     placeEncoreAfter,
+    placeSetlistBreakAfter,
     prediction,
     removeSong,
+    reorderSong,
     selectedGroup,
     selectedSongs,
     selectedUnit,
@@ -355,5 +409,6 @@ export function useSetlistEditor({
     songIds,
     unitOptions,
     visibleEncoreAfters,
+    visibleSetlistBreaks,
   };
 }

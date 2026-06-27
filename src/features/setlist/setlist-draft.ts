@@ -1,8 +1,13 @@
 "use client";
 
 import { LOVE_LIVE_SERIES } from "./data";
-import type { LoveLiveSeries } from "./types";
-import { getValidEncoreAfters } from "./utils";
+import type { LoveLiveSeries, SetlistBreak } from "./types";
+import {
+  getEncoreAftersFromBreaks,
+  getValidEncoreAfters,
+  getValidSetlistBreaks,
+  isSetlistBreakType,
+} from "./utils";
 
 export const SETLIST_DRAFT_STORAGE_KEY =
   "link-like-setlist-maker:setlist-draft";
@@ -15,11 +20,19 @@ type StoredSetlistDraftPayload = {
   selectedGroup: LoveLiveSeries | null;
   songIds: string[];
   encoreAfters: number[];
+  breaks?: SetlistBreak[];
   savedAt: number;
 };
 
-export type SetlistDraft = Omit<StoredSetlistDraftPayload, "version">;
-export type SetlistDraftInput = Omit<SetlistDraft, "savedAt">;
+export type SetlistDraft = Omit<
+  StoredSetlistDraftPayload,
+  "version" | "breaks"
+> & {
+  breaks: SetlistBreak[];
+};
+export type SetlistDraftInput = Omit<SetlistDraft, "savedAt" | "breaks"> & {
+  breaks?: SetlistBreak[];
+};
 
 function getBrowserStorage() {
   if (typeof window === "undefined") {
@@ -56,7 +69,7 @@ export function parseStoredSetlistDraft(value: string | null) {
       return null;
     }
 
-    const { encoreAfters, savedAt, selectedGroup, songIds } = parsed;
+    const { breaks, encoreAfters, savedAt, selectedGroup, songIds } = parsed;
 
     if (
       !(selectedGroup === null || isLoveLiveSeries(selectedGroup)) ||
@@ -64,16 +77,37 @@ export function parseStoredSetlistDraft(value: string | null) {
       !songIds.every((songId) => typeof songId === "string") ||
       !Array.isArray(encoreAfters) ||
       !encoreAfters.every(Number.isInteger) ||
+      !(
+        breaks === undefined ||
+        (Array.isArray(breaks) &&
+          breaks.every(
+            (breakItem) =>
+              isRecord(breakItem) &&
+              Number.isInteger(breakItem.after) &&
+              isSetlistBreakType(breakItem.type),
+          ))
+      ) ||
       typeof savedAt !== "number" ||
       !Number.isFinite(savedAt)
     ) {
       return null;
     }
 
+    const validBreaks = getValidSetlistBreaks(
+      breaks === undefined
+        ? getValidEncoreAfters(encoreAfters, songIds.length).map((after) => ({
+            after,
+            type: "encore" as const,
+          }))
+        : breaks,
+      songIds.length,
+    );
+
     return {
       selectedGroup,
       songIds,
-      encoreAfters: getValidEncoreAfters(encoreAfters, songIds.length),
+      breaks: validBreaks,
+      encoreAfters: getEncoreAftersFromBreaks(validBreaks),
       savedAt,
     } satisfies SetlistDraft;
   } catch {
@@ -102,11 +136,21 @@ export function getRestorableSetlistDraft(
   const songIds = draft.songIds.filter((songId) =>
     availableSongIds.has(songId),
   );
+  const sourceBreaks =
+    draft.breaks ??
+    getValidEncoreAfters(draft.encoreAfters, draft.songIds.length).map(
+      (after) => ({
+        after,
+        type: "encore" as const,
+      }),
+    );
+  const breaks = getValidSetlistBreaks(sourceBreaks, songIds.length);
 
   return {
     ...draft,
     songIds,
-    encoreAfters: getValidEncoreAfters(draft.encoreAfters, songIds.length),
+    breaks,
+    encoreAfters: getEncoreAftersFromBreaks(breaks),
   } satisfies SetlistDraft;
 }
 
@@ -118,11 +162,23 @@ export function writeStoredSetlistDraft(
     return;
   }
 
+  const validBreaks = getValidSetlistBreaks(
+    draft.breaks ??
+      getValidEncoreAfters(draft.encoreAfters, draft.songIds.length).map(
+        (after) => ({
+          after,
+          type: "encore" as const,
+        }),
+      ),
+    draft.songIds.length,
+  );
+
   const payload = {
     version: 1,
     selectedGroup: draft.selectedGroup,
     songIds: draft.songIds,
-    encoreAfters: getValidEncoreAfters(draft.encoreAfters, draft.songIds.length),
+    breaks: validBreaks,
+    encoreAfters: getEncoreAftersFromBreaks(validBreaks),
     savedAt: Date.now(),
   } satisfies StoredSetlistDraftPayload;
 

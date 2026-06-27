@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useEffectEvent } from "react";
-import type { Song } from "../types";
-import { getValidEncoreAfters, parseStoredEncoreAfters } from "../utils";
+import type { SetlistBreak, Song } from "../types";
+import { getValidSetlistBreaks, parseStoredSetlistBreaks } from "../utils";
 
 type BackendSetlistResponse = {
   setlist?: {
@@ -11,13 +11,15 @@ type BackendSetlistResponse = {
       position: number;
       songId: string;
     }>;
+    title?: string | null;
   };
 };
 
 type UseSharedSetlistLoaderOptions = {
   enabled: boolean;
   onError: (message: string) => void;
-  onLoaded: (songIds: string[], encoreAfters: number[]) => void;
+  onLoaded: (songIds: string[], breaks: SetlistBreak[]) => void;
+  onTitleLoaded?: (title: string) => void;
   sharedSetlistId?: string;
   songs: Song[];
 };
@@ -26,11 +28,15 @@ export function useSharedSetlistLoader({
   enabled,
   onError,
   onLoaded,
+  onTitleLoaded,
   sharedSetlistId,
   songs,
 }: UseSharedSetlistLoaderOptions) {
   const handleLoaded = useEffectEvent(onLoaded);
   const handleError = useEffectEvent(onError);
+  const handleTitleLoaded = useEffectEvent((title: string) => {
+    onTitleLoaded?.(title);
+  });
 
   useEffect(() => {
     if (!enabled || !sharedSetlistId || songs.length === 0) {
@@ -64,12 +70,15 @@ export function useSharedSetlistLoader({
           .sort((a, b) => a.position - b.position)
           .map((item) => item.songId)
           .filter((songId) => availableSongIdSet.has(songId));
-        const nextEncoreAfters = getValidEncoreAfters(
-          parseStoredEncoreAfters(payload.setlist.description),
+        const nextBreaks = getValidSetlistBreaks(
+          parseStoredSetlistBreaks(payload.setlist.description),
           nextSongIds.length,
         );
 
-        handleLoaded(nextSongIds, nextEncoreAfters);
+        handleLoaded(nextSongIds, nextBreaks);
+        if (payload.setlist.title?.trim()) {
+          handleTitleLoaded(payload.setlist.title);
+        }
         handleError("");
       } catch {
         if (!isCancelled) {

@@ -5,6 +5,7 @@ import { SongMeta } from "./SongMeta";
 
 type SongPickerOverlayProps = {
   activeSlotIndex: number | null;
+  coverUrlBySongId: Record<string, string | null>;
   errorMessage: string;
   onBeginSongConfirm: (songId: string) => void;
   isLoading: boolean;
@@ -23,6 +24,7 @@ type SongPickerOverlayProps = {
 
 export function SongPickerOverlay({
   activeSlotIndex,
+  coverUrlBySongId,
   errorMessage,
   isLoading,
   isOpen,
@@ -134,15 +136,34 @@ export function SongPickerOverlay({
                 >
                   <span className="absolute inset-y-0 left-0 w-2 bg-black transition-all duration-200 group-hover/song:w-4" />
                   <span className="absolute -right-8 top-0 h-full w-12 skew-x-[-18deg] bg-black" />
-                  <div className="relative z-10 flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-black tracking-[0.24em] text-rose-600 transition-colors duration-200 group-hover/song:text-white/75">
-                        CANDIDATE {String(index + 1).padStart(2, "0")}
-                      </p>
-                      <h3 className="mt-1 truncate text-lg font-black tracking-[0.05em] text-zinc-950 transition-colors duration-200 group-hover/song:text-white sm:text-xl">
-                        {song.title}
-                      </h3>
-                      <SongMeta song={song} accent="persona" />
+                  <div className="relative z-10 flex items-center justify-between gap-4">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        aria-hidden="true"
+                        className="relative h-14 w-14 shrink-0 overflow-hidden border-2 border-black bg-zinc-950 shadow-[3px_3px_0_rgba(0,0,0,0.35)] sm:h-16 sm:w-16"
+                      >
+                        {coverUrlBySongId[song.id] ? (
+                          <div
+                            className="absolute inset-0 bg-cover bg-center"
+                            style={{
+                              backgroundImage: `url(${coverUrlBySongId[song.id]})`,
+                            }}
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center bg-black text-lg font-black tracking-[0.08em] text-white">
+                            ラ
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black tracking-[0.24em] text-rose-600 transition-colors duration-200 group-hover/song:text-white/75">
+                          CANDIDATE {String(index + 1).padStart(2, "0")}
+                        </p>
+                        <h3 className="mt-1 truncate text-lg font-black tracking-[0.05em] text-zinc-950 transition-colors duration-200 group-hover/song:text-white sm:text-xl">
+                          {song.title}
+                        </h3>
+                        <SongMeta song={song} accent="persona" />
+                      </div>
                     </div>
                     <span
                       aria-hidden="true"

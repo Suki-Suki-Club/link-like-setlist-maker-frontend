@@ -1,12 +1,13 @@
 "use client";
 
-import type { LoveLiveSeries, Song } from "../types";
-import { EncoreDivider } from "./EncoreDivider";
+import type { LoveLiveSeries, SetlistBreak, Song } from "../types";
+import { SetlistBreakDivider } from "./SetlistBreakDivider";
 import { ReviewSongRow } from "./ReviewSongRow";
 import { ShareCommandPanel } from "./ShareCommandPanel";
 
 type ReviewStepPanelProps = {
   canSaveShareUrl: boolean;
+  coverUrlBySongId: Record<string, string | null>;
   hasIssuedShareUrl: boolean;
   onBackToSongs: () => void;
   onBeginReadOnlyPreview: (songId: string, pointerType?: string) => void;
@@ -20,11 +21,12 @@ type ReviewStepPanelProps = {
   setlistTitle: string;
   shareStatus: string;
   shareUrl: string;
-  visibleEncoreAfters: number[];
+  visibleSetlistBreaks: SetlistBreak[];
 };
 
 export function ReviewStepPanel({
   canSaveShareUrl,
+  coverUrlBySongId,
   hasIssuedShareUrl,
   onBackToSongs,
   onBeginReadOnlyPreview,
@@ -38,7 +40,7 @@ export function ReviewStepPanel({
   setlistTitle,
   shareStatus,
   shareUrl,
-  visibleEncoreAfters,
+  visibleSetlistBreaks,
 }: ReviewStepPanelProps) {
   return (
     <section className="relative overflow-hidden border-4 border-black bg-white shadow-[14px_14px_0_#111]">
@@ -53,7 +55,7 @@ export function ReviewStepPanel({
               {readOnly ? "SHARED VIEW" : "SAVE PREVIEW"}
             </p>
             <h2 className="mt-1 text-3xl font-black uppercase tracking-[0.06em] text-zinc-950 sm:text-5xl">
-              {readOnly ? "My Select Setlist" : "Final Setlist"}
+              {readOnly ? setlistTitle : "Final Setlist"}
             </h2>
             <p className="mt-3 text-sm font-bold tracking-[0.16em] text-zinc-500">
               {selectedGroup ?? "-"} / {selectedSongs.length} SONGS
@@ -81,16 +83,17 @@ export function ReviewStepPanel({
             {selectedSongs.map((song, index) => (
               <li key={`${song.id}-${index}`}>
                 <ReviewSongRow
+                  coverUrl={coverUrlBySongId[song.id] ?? null}
                   index={index}
                   onBeginReadOnlyPreview={onBeginReadOnlyPreview}
                   onOpenPreview={onOpenPreview}
                   readOnly={readOnly}
                   song={song}
                 />
-                <EncoreDivider
+                <SetlistBreakDivider
                   index={index}
                   songCount={selectedSongs.length}
-                  visibleEncoreAfters={visibleEncoreAfters}
+                  visibleBreaks={visibleSetlistBreaks}
                 />
               </li>
             ))}

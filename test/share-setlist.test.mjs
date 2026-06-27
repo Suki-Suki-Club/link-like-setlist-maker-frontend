@@ -53,13 +53,17 @@ test("setlist save payload uses the editable title", () => {
           {
             songIds: ["dream-believers", "on-your-mark"],
             encoreAfters: [0],
+            breaks: [{ after: 0, type: "encore" }],
           },
           "  夏のセットリスト  ",
         ),
       ),
     ),
     {
-      description: JSON.stringify({ encoreAfters: [0] }),
+      description: JSON.stringify({
+        breaks: [{ after: 0, type: "encore" }],
+        encoreAfters: [0],
+      }),
       items: [
         {
           position: 1,
@@ -80,7 +84,37 @@ test("setlist save payload falls back to the default title when blank", () => {
     loadShareSetlistModule();
 
   assert.equal(
-    createSetlistSavePayload({ songIds: ["dream-believers"], encoreAfters: [] }, " ").title,
+    createSetlistSavePayload(
+      { songIds: ["dream-believers"], encoreAfters: [], breaks: [] },
+      " ",
+    ).title,
     DEFAULT_SETLIST_TITLE,
+  );
+});
+
+test("setlist save payload stores MC and interlude breaks", () => {
+  const { createSetlistSavePayload } = loadShareSetlistModule();
+
+  assert.deepEqual(
+    JSON.parse(
+      createSetlistSavePayload(
+        {
+          songIds: ["dream-believers", "on-your-mark", "reflection"],
+          encoreAfters: [],
+          breaks: [
+            { after: 0, type: "mc" },
+            { after: 1, type: "interlude" },
+          ],
+        },
+        "breaks",
+      ).description,
+    ),
+    {
+      breaks: [
+        { after: 0, type: "mc" },
+        { after: 1, type: "interlude" },
+      ],
+      encoreAfters: [],
+    },
   );
 });

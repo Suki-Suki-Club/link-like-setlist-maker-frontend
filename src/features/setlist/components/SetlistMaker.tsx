@@ -65,6 +65,7 @@ export function SetlistMaker({
     openSongPreviewConfirm,
     playSongPreviewAudio,
     playSongHoverPreview,
+    previewBySongId,
     resetPreviewInteraction,
     selectedPreview,
     selectedPreviewSong,
@@ -72,6 +73,7 @@ export function SetlistMaker({
     stopSongHoverPreview,
   } = useSongPreviewController({
     canPlaySound,
+    prefetchPreviews: currentStep === "songs",
     songMap,
     soundVolume,
     songs,
@@ -85,6 +87,7 @@ export function SetlistMaker({
     enabled: isReadOnlyShareView,
     onError: setSongsError,
     onLoaded: editor.applySharedSetlist,
+    onTitleLoaded: setSetlistTitle,
     sharedSetlistId,
     songs,
   });
@@ -230,6 +233,12 @@ export function SetlistMaker({
       {currentStep === "songs" ? (
         <SongSelectStepPanel
           activeSlotIndex={editor.activeSlotIndex}
+          coverUrlBySongId={Object.fromEntries(
+            Object.entries(previewBySongId).map(([songId, preview]) => [
+              songId,
+              preview.coverUrl,
+            ]),
+          )}
           errorMessage={songsError}
           filteredSongs={editor.filteredSongs}
           isPreviewConfirmOpen={isPreviewConfirmOpen}
@@ -239,7 +248,7 @@ export function SetlistMaker({
           keyword={editor.keyword}
           onBackToGroup={openGroupSelection}
           onBeginSongConfirm={beginSongPreviewConfirm}
-          onClearEncore={editor.clearEncore}
+          onClearSetlistBreak={editor.clearSetlistBreak}
           onClearSetlist={clearSetlist}
           onCloseSongPicker={closeSongPicker}
           onCloseSongPreviewConfirm={closeSongPreviewConfirm}
@@ -251,8 +260,9 @@ export function SetlistMaker({
           onMoveSong={editor.moveSong}
           onOpenSongConfirm={openSongPreviewConfirm}
           onOpenSongPicker={openSongPicker}
-          onPlaceEncore={editor.placeEncoreAfter}
+          onPlaceSetlistBreak={editor.placeSetlistBreakAfter}
           onRemoveSong={editor.removeSong}
+          onReorderSong={editor.reorderSong}
           onUnitChange={editor.setSelectedUnit}
           previewCoverUrl={selectedPreview?.coverUrl ?? null}
           previewSong={selectedPreviewSong}
@@ -266,12 +276,19 @@ export function SetlistMaker({
           songCount={editor.songIds.length}
           unitOptions={editor.unitOptions}
           visibleEncoreAfters={editor.visibleEncoreAfters}
+          visibleSetlistBreaks={editor.visibleSetlistBreaks}
         />
       ) : null}
 
       {currentStep === "review" ? (
         <ReviewStepPanel
           canSaveShareUrl={canSaveShareUrl}
+          coverUrlBySongId={Object.fromEntries(
+            Object.entries(previewBySongId).map(([songId, preview]) => [
+              songId,
+              preview.coverUrl,
+            ]),
+          )}
           hasIssuedShareUrl={share.hasIssuedShareUrl}
           onBackToSongs={() => setCurrentStep("songs")}
           onBeginReadOnlyPreview={beginReadOnlySongPreview}
@@ -287,7 +304,7 @@ export function SetlistMaker({
           setlistTitle={setlistTitle}
           shareStatus={share.shareStatus}
           shareUrl={share.shareUrl}
-          visibleEncoreAfters={editor.visibleEncoreAfters}
+          visibleSetlistBreaks={editor.visibleSetlistBreaks}
         />
       ) : null}
     </main>
