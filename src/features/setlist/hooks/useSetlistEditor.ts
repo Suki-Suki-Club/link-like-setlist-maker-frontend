@@ -1,7 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ALL_UNITS_OPTION } from "../constants";
+import {
+  getRestorableSetlistDraft,
+  readStoredSetlistDraft,
+  removeStoredSetlistDraft,
+  writeStoredSetlistDraft,
+  type SetlistDraft,
+} from "../setlist-draft";
 import type { LoveLiveSeries, SetlistPrediction, Song } from "../types";
 import {
   getValidEncoreAfters,
@@ -15,12 +28,16 @@ export type SetlistSlot = {
 };
 
 type UseSetlistEditorOptions = {
+  enableDraftStorage?: boolean;
+  onDraftRestored?: (draft: SetlistDraft) => void;
   onDirty: () => void;
   songMap: Map<string, Song>;
   songs: Song[];
 };
 
 export function useSetlistEditor({
+  enableDraftStorage = true,
+  onDraftRestored,
   onDirty,
   songMap,
   songs,
@@ -35,6 +52,22 @@ export function useSetlistEditor({
   const [encoreAfters, setEncoreAfters] = useState<number[]>([]);
   const [isSongPickerOpen, setIsSongPickerOpen] = useState(false);
   const [activeSlotIndex, setActiveSlotIndex] = useState<number | null>(null);
+  const hasRestoredDraftRef = useRef(false);
+  const restoreDraftState = useEffectEvent((draft: SetlistDraft) => {
+    setSelectedGroup(draft.selectedGroup);
+    setPendingGroup(
+      draft.selectedGroup && isGroupSelectable(draft.selectedGroup)
+        ? draft.selectedGroup
+        : null,
+    );
+    setSelectedUnit(ALL_UNITS_OPTION);
+    setKeyword("");
+    setSongIds(draft.songIds);
+    setEncoreAfters(draft.encoreAfters);
+    setIsSongPickerOpen(false);
+    setActiveSlotIndex(null);
+    onDraftRestored?.(draft);
+  });
 
   const selectedSongs = useMemo(
     () =>
@@ -103,6 +136,47 @@ export function useSetlistEditor({
   const canConfirmGroupSelection =
     pendingGroup !== null && isGroupSelectable(pendingGroup);
 
+  function saveDraft(
+    nextSelectedGroup: LoveLiveSeries | null,
+    nextSongIds: string[],
+    nextEncoreAfters: number[],
+  ) {
+    if (!enableDraftStorage) {
+      return;
+    }
+
+    writeStoredSetlistDraft({
+      selectedGroup: nextSelectedGroup,
+      songIds: nextSongIds,
+      encoreAfters: nextEncoreAfters,
+    });
+  }
+
+  useEffect(() => {
+    if (!enableDraftStorage || hasRestoredDraftRef.current || songs.length === 0) {
+      return;
+    }
+
+    hasRestoredDraftRef.current = true;
+
+    const storedDraft = readStoredSetlistDraft();
+
+    if (!storedDraft) {
+      return;
+    }
+
+    const restoredDraft = getRestorableSetlistDraft(
+      storedDraft,
+      new Set(songs.map((song) => song.id)),
+    );
+
+    if (!restoredDraft.selectedGroup && restoredDraft.songIds.length === 0) {
+      return;
+    }
+
+    queueMicrotask(() => restoreDraftState(restoredDraft));
+  }, [enableDraftStorage, songs]);
+
   function openGroupSelection() {
     setPendingGroup(
       selectedGroup && isGroupSelectable(selectedGroup) ? selectedGroup : null,
@@ -122,6 +196,7 @@ export function useSetlistEditor({
     setKeyword("");
     setIsSongPickerOpen(false);
     setActiveSlotIndex(null);
+    saveDraft(group, songIds, encoreAfters);
     onDirty();
   }
 
@@ -140,36 +215,37 @@ export function useSetlistEditor({
       return;
     }
 
-    setSongIds((current) => {
-      if (activeSlotIndex >= current.length) {
-        return [...current, songId];
-      }
+    const nextSongIds =
+      activeSlotIndex >= songIds.length
+        ? [...songIds, songId]
+        : songIds.map((currentSongId, currentIndex) =>
+            currentIndex === activeSlotIndex ? songId : currentSongId,
+          );
 
-      const next = [...current];
-      next[activeSlotIndex] = songId;
-      return next;
-    });
+    setSongIds(nextSongIds);
+    saveDraft(selectedGroup, nextSongIds, encoreAfters);
     onDirty();
     closeSongPicker();
   }
 
   function removeSong(index: number) {
-    setSongIds((current) =>
-      current.filter((_, currentIndex) => currentIndex !== index),
+    const nextSongIds = songIds.filter(
+      (_, currentIndex) => currentIndex !== index,
     );
-    setEncoreAfters((current) =>
-      getValidEncoreAfters(
-        current
-          .filter(
-            (encoreAfter) =>
-              index !== encoreAfter && index !== encoreAfter + 1,
-          )
-          .map((encoreAfter) =>
-            index < encoreAfter ? encoreAfter - 1 : encoreAfter,
-          ),
-        songIds.length - 1,
-      ),
+    const nextEncoreAfters = getValidEncoreAfters(
+      encoreAfters
+        .filter(
+          (encoreAfter) => index !== encoreAfter && index !== encoreAfter + 1,
+        )
+        .map((encoreAfter) =>
+          index < encoreAfter ? encoreAfter - 1 : encoreAfter,
+        ),
+      nextSongIds.length,
     );
+
+    setSongIds(nextSongIds);
+    setEncoreAfters(nextEncoreAfters);
+    saveDraft(selectedGroup, nextSongIds, nextEncoreAfters);
     onDirty();
   }
 
@@ -180,13 +256,17 @@ export function useSetlistEditor({
       return;
     }
 
-    setEncoreAfters((current) => {
-      if (current.includes(nextEncoreAfter)) {
-        return current;
-      }
+    if (encoreAfters.includes(nextEncoreAfter)) {
+      return;
+    }
 
-      return getValidEncoreAfters([...current, nextEncoreAfter], songIds.length);
-    });
+    const nextEncoreAfters = getValidEncoreAfters(
+      [...encoreAfters, nextEncoreAfter],
+      songIds.length,
+    );
+
+    setEncoreAfters(nextEncoreAfters);
+    saveDraft(selectedGroup, songIds, nextEncoreAfters);
     onDirty();
   }
 
@@ -195,12 +275,13 @@ export function useSetlistEditor({
       return;
     }
 
-    setEncoreAfters((current) =>
-      getValidEncoreAfters(
-        current.filter((encoreAfter) => encoreAfter !== index),
-        songIds.length,
-      ),
+    const nextEncoreAfters = getValidEncoreAfters(
+      encoreAfters.filter((encoreAfter) => encoreAfter !== index),
+      songIds.length,
     );
+
+    setEncoreAfters(nextEncoreAfters);
+    saveDraft(selectedGroup, songIds, nextEncoreAfters);
     onDirty();
   }
 
@@ -211,13 +292,13 @@ export function useSetlistEditor({
       return;
     }
 
-    setSongIds((current) => {
-      const next = [...current];
-      const target = next[index];
-      next[index] = next[nextIndex];
-      next[nextIndex] = target;
-      return next;
-    });
+    const nextSongIds = [...songIds];
+    const target = nextSongIds[index];
+    nextSongIds[index] = nextSongIds[nextIndex];
+    nextSongIds[nextIndex] = target;
+
+    setSongIds(nextSongIds);
+    saveDraft(selectedGroup, nextSongIds, encoreAfters);
     onDirty();
   }
 
@@ -225,6 +306,9 @@ export function useSetlistEditor({
     setSongIds([]);
     setEncoreAfters([]);
     closeSongPicker();
+    if (enableDraftStorage) {
+      removeStoredSetlistDraft();
+    }
     onDirty();
   }
 

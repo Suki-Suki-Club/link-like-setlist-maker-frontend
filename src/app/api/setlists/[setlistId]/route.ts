@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server'
-
-const backendApiBaseUrl =
-  process.env.BACKEND_API_BASE_URL ??
-  process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL ??
-  'http://127.0.0.1:3000'
+import { backendApiBaseUrl, createBackendHeaders } from '../../backend'
 
 export async function GET(
   _request: Request,
@@ -16,6 +12,7 @@ export async function GET(
       `${backendApiBaseUrl}/api/setlists/${encodeURIComponent(setlistId)}`,
       {
         cache: 'no-store',
+        headers: createBackendHeaders(),
       },
     )
     const payload = await response.json()

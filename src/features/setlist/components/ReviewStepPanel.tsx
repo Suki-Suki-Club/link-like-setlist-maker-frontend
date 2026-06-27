@@ -12,10 +12,12 @@ type ReviewStepPanelProps = {
   onBeginReadOnlyPreview: (songId: string, pointerType?: string) => void;
   onCopyShareUrl: () => void;
   onOpenPreview: (songId: string) => void;
+  onSetlistTitleChange: (value: string) => void;
   onSaveShareUrl: () => void;
   readOnly: boolean;
   selectedGroup: LoveLiveSeries | null;
   selectedSongs: Song[];
+  setlistTitle: string;
   shareStatus: string;
   shareUrl: string;
   visibleEncoreAfters: number[];
@@ -28,10 +30,12 @@ export function ReviewStepPanel({
   onBeginReadOnlyPreview,
   onCopyShareUrl,
   onOpenPreview,
+  onSetlistTitleChange,
   onSaveShareUrl,
   readOnly,
   selectedGroup,
   selectedSongs,
+  setlistTitle,
   shareStatus,
   shareUrl,
   visibleEncoreAfters,
@@ -100,8 +104,10 @@ export function ReviewStepPanel({
           hasIssuedShareUrl={hasIssuedShareUrl}
           onBackToSongs={onBackToSongs}
           onCopyShareUrl={onCopyShareUrl}
+          onSetlistTitleChange={onSetlistTitleChange}
           onSaveShareUrl={onSaveShareUrl}
           selectedGroup={selectedGroup}
+          setlistTitle={setlistTitle}
           shareStatus={shareStatus}
           shareUrl={shareUrl}
           songCount={selectedSongs.length}

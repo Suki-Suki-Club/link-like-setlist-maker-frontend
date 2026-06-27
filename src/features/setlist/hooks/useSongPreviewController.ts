@@ -43,12 +43,29 @@ type SongPreviewRequestOptions = {
 };
 
 type UseSongPreviewControllerOptions = {
+  canPlaySound: boolean;
   songMap: Map<string, Song>;
+  soundVolume: number;
   songs: Song[];
 };
 
+export function shouldReuseActivePreviewAudio(
+  audio: Pick<HTMLAudioElement, "ended" | "paused"> | null,
+  activePreviewSongId: string | null,
+  songId: string,
+) {
+  return Boolean(
+    audio &&
+      activePreviewSongId === songId &&
+      !audio.paused &&
+      !audio.ended,
+  );
+}
+
 export function useSongPreviewController({
+  canPlaySound,
   songMap,
+  soundVolume,
   songs,
 }: UseSongPreviewControllerOptions) {
   const [selectedPreviewSongId, setSelectedPreviewSongId] = useState<
@@ -65,9 +82,13 @@ export function useSongPreviewController({
   const hoverPreviewRequestSongIdRef = useRef<string | null>(null);
   const previewConfirmSongIdRef = useRef<string | null>(null);
   const pendingPreviewConfirmSongIdRef = useRef<string | null>(null);
+  const canPlaySoundRef = useRef(canPlaySound);
+  const soundVolumeRef = useRef(soundVolume);
   const previewRequestMapRef = useRef<
     Map<string, Promise<SongPreviewRequestResult>>
   >(new Map());
+  canPlaySoundRef.current = canPlaySound;
+  soundVolumeRef.current = soundVolume;
 
   const prefetchSongPreview = useEffectEvent((songId: string) =>
     fetchSongPreviewAndCache(songId),
@@ -268,6 +289,22 @@ export function useSongPreviewController({
     audio.load();
   }
 
+  useEffect(() => {
+    if (!canPlaySound) {
+      stopPreviewAudio();
+    }
+  }, [canPlaySound]);
+
+  useEffect(() => {
+    const audio = previewAudioRef.current;
+
+    if (!audio) {
+      return;
+    }
+
+    audio.volume = soundVolume;
+  }, [soundVolume]);
+
   async function tryPlayPreviewUrl(
     songId: string,
     previewUrl: string,
@@ -275,12 +312,25 @@ export function useSongPreviewController({
   ) {
     const audio = previewAudioRef.current;
 
-    if (!audio) {
+    if (!audio || !canPlaySoundRef.current) {
       return false;
+    }
+
+    if (
+      shouldReuseActivePreviewAudio(
+        audio,
+        activePreviewSongIdRef.current,
+        songId,
+      )
+    ) {
+      audio.loop = loop;
+      audio.volume = soundVolumeRef.current;
+      return true;
     }
 
     activePreviewSongIdRef.current = songId;
     audio.loop = loop;
+    audio.volume = soundVolumeRef.current;
     audio.src = previewUrl;
     audio.currentTime = 0;
 
@@ -303,6 +353,11 @@ export function useSongPreviewController({
     songId: string,
     options?: { loop?: boolean },
   ) {
+    if (!canPlaySoundRef.current) {
+      stopPreviewAudio();
+      return false;
+    }
+
     const cachedPreview = hydrateCachedPreview(songId);
     const loop = options?.loop ?? false;
 
@@ -339,7 +394,11 @@ export function useSongPreviewController({
   async function playSongHoverPreview(songId: string) {
     const audio = previewAudioRef.current;
 
-    if (!audio || activePreviewSongIdRef.current === songId) {
+    if (
+      !audio ||
+      !canPlaySoundRef.current ||
+      activePreviewSongIdRef.current === songId
+    ) {
       return;
     }
 
@@ -353,7 +412,8 @@ export function useSongPreviewController({
 
       if (
         hoverPreviewRequestSongIdRef.current !== songId ||
-        previewResult.cachedPreview.status !== "found"
+        previewResult.cachedPreview.status !== "found" ||
+        !canPlaySoundRef.current
       ) {
         return;
       }
@@ -410,7 +470,7 @@ export function useSongPreviewController({
   function beginReadOnlySongPreview(songId: string, pointerType?: string) {
     pendingPreviewConfirmSongIdRef.current = songId;
 
-    if (pointerType && pointerType !== "mouse") {
+    if (pointerType && pointerType !== "mouse" && canPlaySoundRef.current) {
       void playSongPreviewAudio(songId, { loop: true });
     }
   }
@@ -418,7 +478,10 @@ export function useSongPreviewController({
   function openSongPreviewConfirm(songId: string) {
     previewConfirmSongIdRef.current = songId;
     setSelectedPreviewSongId(songId);
-    void playSongPreviewAudio(songId, { loop: true });
+
+    if (canPlaySoundRef.current) {
+      void playSongPreviewAudio(songId, { loop: true });
+    }
 
     if (previewBySongId[songId]) {
       void fetchSongPreviewAndCache(songId);

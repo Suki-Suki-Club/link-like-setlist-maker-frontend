@@ -10,6 +10,8 @@ type BackendSetlistResponse = {
   };
 };
 
+export const DEFAULT_SETLIST_TITLE = "My Select Setlist";
+
 function subscribeToOrigin() {
   return () => undefined;
 }
@@ -20,6 +22,22 @@ function getClientOrigin() {
 
 function getServerOrigin() {
   return "";
+}
+
+export function createSetlistSavePayload(
+  prediction: SetlistPrediction,
+  setlistTitle: string,
+) {
+  return {
+    description: JSON.stringify({
+      encoreAfters: prediction.encoreAfters,
+    }),
+    items: prediction.songIds.map((songId, index) => ({
+      position: index + 1,
+      songId,
+    })),
+    title: setlistTitle.trim() || DEFAULT_SETLIST_TITLE,
+  };
 }
 
 export function useShareSetlist() {
@@ -59,23 +77,17 @@ export function useShareSetlist() {
     }
   }
 
-  async function saveShareUrl(prediction: SetlistPrediction) {
+  async function saveShareUrl(
+    prediction: SetlistPrediction,
+    setlistTitle: string,
+  ) {
     if (prediction.songIds.length === 0) {
       return;
     }
 
     try {
       const response = await fetch("/api/setlists", {
-        body: JSON.stringify({
-          description: JSON.stringify({
-            encoreAfters: prediction.encoreAfters,
-          }),
-          items: prediction.songIds.map((songId, index) => ({
-            position: index + 1,
-            songId,
-          })),
-          title: "My Select Setlist",
-        }),
+        body: JSON.stringify(createSetlistSavePayload(prediction, setlistTitle)),
         cache: "no-store",
         headers: {
           "content-type": "application/json",

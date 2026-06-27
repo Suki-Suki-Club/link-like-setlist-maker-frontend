@@ -4,15 +4,28 @@ import { useState } from "react";
 import Image from "next/image";
 import { GROUP_OPTIONS, GROUP_PREVIEW_SONG_IDS } from "../constants";
 import { useSetlistEditor } from "../hooks/useSetlistEditor";
-import { useShareSetlist } from "../hooks/useShareSetlist";
+import {
+  DEFAULT_SETLIST_TITLE,
+  useShareSetlist,
+} from "../hooks/useShareSetlist";
 import { useSharedSetlistLoader } from "../hooks/useSharedSetlistLoader";
+import { useSoundPreferenceSnapshot } from "../hooks/useSoundPreferenceSnapshot";
 import { useSongPreviewController } from "../hooks/useSongPreviewController";
 import { useSongsCatalog } from "../hooks/useSongsCatalog";
+import {
+  isSoundEnabled,
+  shouldShowSoundPreferencePrompt,
+  writeStoredSoundPreference,
+  writeStoredSoundVolume,
+  type SoundPreference,
+} from "../sound-preference";
 import type { LoveLiveSeries } from "../types";
 import { isGroupSelectable } from "../utils";
 import { GroupStepPanel } from "./GroupStepPanel";
 import { ReviewStepPanel } from "./ReviewStepPanel";
 import { SongSelectStepPanel } from "./SongSelectStepPanel";
+import { SoundPreferencePrompt } from "./SoundPreferencePrompt";
+import { SoundVolumeControl } from "./SoundVolumeControl";
 
 type WizardStep = "group" | "songs" | "review";
 
@@ -27,14 +40,20 @@ export function SetlistMaker({
   const [currentStep, setCurrentStep] = useState<WizardStep>(
     isReadOnlyShareView ? "review" : "group",
   );
+  const [setlistTitle, setSetlistTitle] = useState(DEFAULT_SETLIST_TITLE);
+  const soundPreferenceSnapshot = useSoundPreferenceSnapshot();
   const { isSongsLoading, setSongsError, songMap, songs, songsError } =
     useSongsCatalog();
   const share = useShareSetlist();
   const editor = useSetlistEditor({
+    enableDraftStorage: !isReadOnlyShareView,
     onDirty: share.resetShareState,
+    onDraftRestored: () => setCurrentStep("songs"),
     songMap,
     songs,
   });
+  const canPlaySound = isSoundEnabled(soundPreferenceSnapshot.preference);
+  const soundVolume = soundPreferenceSnapshot.volume;
   const {
     audioRef,
     beginReadOnlySongPreview,
@@ -52,10 +71,15 @@ export function SetlistMaker({
     selectedPreviewSongId,
     stopSongHoverPreview,
   } = useSongPreviewController({
+    canPlaySound,
     songMap,
+    soundVolume,
     songs,
   });
   const canSaveShareUrl = editor.selectedSongs.length > 0;
+  const isSoundPreferencePromptOpen =
+    soundPreferenceSnapshot.isLoaded &&
+    shouldShowSoundPreferencePrompt(soundPreferenceSnapshot.preference);
 
   useSharedSetlistLoader({
     enabled: isReadOnlyShareView,
@@ -65,7 +89,28 @@ export function SetlistMaker({
     songs,
   });
 
+  function chooseSoundPreference(preference: SoundPreference) {
+    writeStoredSoundPreference(preference);
+
+    if (!isSoundEnabled(preference)) {
+      resetPreviewInteraction();
+    }
+  }
+
+  function changeSoundVolume(volume: number) {
+    writeStoredSoundVolume(volume);
+  }
+
+  function changeSetlistTitle(value: string) {
+    setSetlistTitle(value);
+    share.resetShareState();
+  }
+
   async function playGroupPreview(group: LoveLiveSeries) {
+    if (!canPlaySound) {
+      return;
+    }
+
     const songId = GROUP_PREVIEW_SONG_IDS[group];
 
     if (!songId) {
@@ -154,6 +199,24 @@ export function SetlistMaker({
         </h1>
       </header>
 
+      <audio ref={audioRef} className="hidden" preload="none" loop />
+
+      <SoundPreferencePrompt
+        isOpen={isSoundPreferencePromptOpen}
+        onDisableSound={() => chooseSoundPreference("disabled")}
+        onEnableSound={() => chooseSoundPreference("enabled")}
+      />
+
+      <SoundVolumeControl
+        isVisible={
+          soundPreferenceSnapshot.isLoaded &&
+          canPlaySound &&
+          !isSoundPreferencePromptOpen
+        }
+        onVolumeChange={changeSoundVolume}
+        volume={soundVolume}
+      />
+
       {currentStep === "group" ? (
         <GroupStepPanel
           canConfirmGroupSelection={editor.canConfirmGroupSelection}
@@ -163,8 +226,6 @@ export function SetlistMaker({
           pendingGroup={editor.pendingGroup}
         />
       ) : null}
-
-      <audio ref={audioRef} className="hidden" preload="none" loop />
 
       {currentStep === "songs" ? (
         <SongSelectStepPanel
@@ -216,10 +277,14 @@ export function SetlistMaker({
           onBeginReadOnlyPreview={beginReadOnlySongPreview}
           onCopyShareUrl={share.copyIssuedShareUrl}
           onOpenPreview={openSongPreviewConfirm}
-          onSaveShareUrl={() => void share.saveShareUrl(editor.prediction)}
+          onSetlistTitleChange={changeSetlistTitle}
+          onSaveShareUrl={() =>
+            void share.saveShareUrl(editor.prediction, setlistTitle)
+          }
           readOnly={isReadOnlyShareView}
           selectedGroup={editor.selectedGroup}
           selectedSongs={editor.selectedSongs}
+          setlistTitle={setlistTitle}
           shareStatus={share.shareStatus}
           shareUrl={share.shareUrl}
           visibleEncoreAfters={editor.visibleEncoreAfters}

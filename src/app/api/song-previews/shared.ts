@@ -1,7 +1,4 @@
-const backendApiBaseUrl =
-  process.env.BACKEND_API_BASE_URL ??
-  process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL ??
-  "http://127.0.0.1:3000";
+import { backendApiBaseUrl, createBackendHeaders } from "../backend";
 
 export type SongPreviewResponse = {
   status: "found" | "not_found" | "unavailable";
@@ -25,6 +22,7 @@ export async function fetchSongPreview(songId: string, refresh = false) {
     `${backendApiBaseUrl}/api/songs/${encodeURIComponent(songId)}/preview${query ? `?${query}` : ""}`,
     {
       cache: "no-store",
+      headers: createBackendHeaders(),
     },
   );
 }

@@ -7,8 +7,10 @@ type ShareCommandPanelProps = {
   hasIssuedShareUrl: boolean;
   onBackToSongs: () => void;
   onCopyShareUrl: () => void;
+  onSetlistTitleChange: (value: string) => void;
   onSaveShareUrl: () => void;
   selectedGroup: LoveLiveSeries | null;
+  setlistTitle: string;
   shareStatus: string;
   shareUrl: string;
   songCount: number;
@@ -19,8 +21,10 @@ export function ShareCommandPanel({
   hasIssuedShareUrl,
   onBackToSongs,
   onCopyShareUrl,
+  onSetlistTitleChange,
   onSaveShareUrl,
   selectedGroup,
+  setlistTitle,
   shareStatus,
   shareUrl,
   songCount,
@@ -51,6 +55,19 @@ export function ShareCommandPanel({
             </div>
           </dl>
           <div className="border-2 border-black bg-white p-3 shadow-[4px_4px_0_#111]">
+            <label className="grid gap-1 text-xs font-black tracking-[0.16em] text-zinc-700">
+              SETLIST NAME
+              <input
+                className="h-12 border-2 border-black bg-white px-3 text-sm font-bold text-zinc-950 outline-none placeholder:text-zinc-400 focus:border-rose-600"
+                maxLength={80}
+                onChange={(event) => onSetlistTitleChange(event.target.value)}
+                placeholder="セットリスト名"
+                value={setlistTitle}
+              />
+            </label>
+          </div>
+
+          <div className="border-2 border-black bg-white p-3 shadow-[4px_4px_0_#111]">
             <div className="flex items-center justify-between gap-3">
               <p className="text-[10px] font-black tracking-[0.2em] text-zinc-500">
                 SAVE STATUS
@@ -75,7 +92,7 @@ export function ShareCommandPanel({
           <button
             type="button"
             className="h-14 border-2 border-black bg-black px-4 text-sm font-black tracking-[0.18em] text-white shadow-[6px_6px_0_#e11d48] transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:border-zinc-300 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none"
-            disabled={!canSaveShareUrl}
+            disabled={!canSaveShareUrl || setlistTitle.trim().length === 0}
             onClick={onSaveShareUrl}
           >
             保存してURLをコピー
