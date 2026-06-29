@@ -19,6 +19,7 @@ import {
   writeStoredSoundVolume,
   type SoundPreference,
 } from "../sound-preference";
+import { downloadSetlistImage } from "../setlist-image";
 import type { LoveLiveSeries } from "../types";
 import { isGroupSelectable } from "../utils";
 import { GroupStepPanel } from "./GroupStepPanel";
@@ -40,6 +41,8 @@ export function SetlistMaker({
   const [currentStep, setCurrentStep] = useState<WizardStep>(
     isReadOnlyShareView ? "review" : "group",
   );
+  const [imageSaveStatus, setImageSaveStatus] = useState("");
+  const [isSavingImage, setIsSavingImage] = useState(false);
   const [setlistTitle, setSetlistTitle] = useState(DEFAULT_SETLIST_TITLE);
   const soundPreferenceSnapshot = useSoundPreferenceSnapshot();
   const { isSongsLoading, setSongsError, songMap, songs, songsError } =
@@ -107,6 +110,30 @@ export function SetlistMaker({
   function changeSetlistTitle(value: string) {
     setSetlistTitle(value);
     share.resetShareState();
+    setImageSaveStatus("");
+  }
+
+  async function saveSetlistImage() {
+    if (editor.selectedSongs.length === 0 || isSavingImage) {
+      return;
+    }
+
+    setIsSavingImage(true);
+    setImageSaveStatus("画像を作成中...");
+
+    try {
+      await downloadSetlistImage({
+        selectedGroup: editor.selectedGroup,
+        setlistTitle,
+        songs: editor.selectedSongs,
+        visibleSetlistBreaks: editor.visibleSetlistBreaks,
+      });
+      setImageSaveStatus("画像を保存しました");
+    } catch {
+      setImageSaveStatus("画像を保存できませんでした");
+    } finally {
+      setIsSavingImage(false);
+    }
   }
 
   async function playGroupPreview(group: LoveLiveSeries) {
@@ -290,10 +317,13 @@ export function SetlistMaker({
             ]),
           )}
           hasIssuedShareUrl={share.hasIssuedShareUrl}
+          imageSaveStatus={imageSaveStatus}
+          isSavingImage={isSavingImage}
           onBackToSongs={() => setCurrentStep("songs")}
           onBeginReadOnlyPreview={beginReadOnlySongPreview}
           onCopyShareUrl={share.copyIssuedShareUrl}
           onOpenPreview={openSongPreviewConfirm}
+          onSaveImage={() => void saveSetlistImage()}
           onSetlistTitleChange={changeSetlistTitle}
           onSaveShareUrl={() =>
             void share.saveShareUrl(editor.prediction, setlistTitle)

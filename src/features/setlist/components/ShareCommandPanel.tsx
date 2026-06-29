@@ -5,8 +5,11 @@ import type { LoveLiveSeries } from "../types";
 type ShareCommandPanelProps = {
   canSaveShareUrl: boolean;
   hasIssuedShareUrl: boolean;
+  imageSaveStatus: string;
+  isSavingImage: boolean;
   onBackToSongs: () => void;
   onCopyShareUrl: () => void;
+  onSaveImage: () => void;
   onSetlistTitleChange: (value: string) => void;
   onSaveShareUrl: () => void;
   selectedGroup: LoveLiveSeries | null;
@@ -19,8 +22,11 @@ type ShareCommandPanelProps = {
 export function ShareCommandPanel({
   canSaveShareUrl,
   hasIssuedShareUrl,
+  imageSaveStatus,
+  isSavingImage,
   onBackToSongs,
   onCopyShareUrl,
+  onSaveImage,
   onSetlistTitleChange,
   onSaveShareUrl,
   selectedGroup,
@@ -97,6 +103,19 @@ export function ShareCommandPanel({
           >
             保存してURLをコピー
           </button>
+          <button
+            type="button"
+            className="h-14 border-2 border-black bg-white px-4 text-sm font-black tracking-[0.18em] text-zinc-950 shadow-[6px_6px_0_#111] transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:border-zinc-300 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none"
+            disabled={!canSaveShareUrl || isSavingImage}
+            onClick={onSaveImage}
+          >
+            {isSavingImage ? "画像を作成中..." : "画像で保存"}
+          </button>
+          {imageSaveStatus ? (
+            <p className="border-2 border-black bg-sky-100 px-3 py-2 text-sm font-black tracking-[0.08em] text-sky-900 shadow-[4px_4px_0_#111]">
+              {imageSaveStatus}
+            </p>
+          ) : null}
           {hasIssuedShareUrl ? (
             <div className="grid gap-3">
               <input

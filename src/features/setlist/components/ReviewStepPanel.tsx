@@ -9,10 +9,13 @@ type ReviewStepPanelProps = {
   canSaveShareUrl: boolean;
   coverUrlBySongId: Record<string, string | null>;
   hasIssuedShareUrl: boolean;
+  imageSaveStatus: string;
+  isSavingImage: boolean;
   onBackToSongs: () => void;
   onBeginReadOnlyPreview: (songId: string, pointerType?: string) => void;
   onCopyShareUrl: () => void;
   onOpenPreview: (songId: string) => void;
+  onSaveImage: () => void;
   onSetlistTitleChange: (value: string) => void;
   onSaveShareUrl: () => void;
   readOnly: boolean;
@@ -28,10 +31,13 @@ export function ReviewStepPanel({
   canSaveShareUrl,
   coverUrlBySongId,
   hasIssuedShareUrl,
+  imageSaveStatus,
+  isSavingImage,
   onBackToSongs,
   onBeginReadOnlyPreview,
   onCopyShareUrl,
   onOpenPreview,
+  onSaveImage,
   onSetlistTitleChange,
   onSaveShareUrl,
   readOnly,
@@ -105,8 +111,11 @@ export function ReviewStepPanel({
         <ShareCommandPanel
           canSaveShareUrl={canSaveShareUrl}
           hasIssuedShareUrl={hasIssuedShareUrl}
+          imageSaveStatus={imageSaveStatus}
+          isSavingImage={isSavingImage}
           onBackToSongs={onBackToSongs}
           onCopyShareUrl={onCopyShareUrl}
+          onSaveImage={onSaveImage}
           onSetlistTitleChange={onSetlistTitleChange}
           onSaveShareUrl={onSaveShareUrl}
           selectedGroup={selectedGroup}
