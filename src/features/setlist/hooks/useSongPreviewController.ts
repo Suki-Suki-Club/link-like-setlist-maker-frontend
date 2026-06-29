@@ -45,6 +45,7 @@ type SongPreviewRequestOptions = {
 type UseSongPreviewControllerOptions = {
   canPlaySound: boolean;
   prefetchPreviews: boolean;
+  prefetchSongIds?: string[];
   songMap: Map<string, Song>;
   soundVolume: number;
   songs: Song[];
@@ -82,9 +83,26 @@ export function mergeCachedSongPreview(
   } satisfies CachedSongPreview;
 }
 
+export function getMissingPreviewSongIds({
+  cachedPreviewBySongId,
+  getCachedPreviewBySongId,
+  songIds,
+}: {
+  cachedPreviewBySongId: Record<string, CachedSongPreview>;
+  getCachedPreviewBySongId: (songId: string) => CachedSongPreview | null;
+  songIds: string[];
+}) {
+  return songIds.filter((songId) => {
+    const preview =
+      cachedPreviewBySongId[songId] ?? getCachedPreviewBySongId(songId);
+    return !preview?.coverUrl || !preview.previewUrl;
+  });
+}
+
 export function useSongPreviewController({
   canPlaySound,
   prefetchPreviews,
+  prefetchSongIds,
   songMap,
   soundVolume,
   songs,
@@ -121,12 +139,12 @@ export function useSongPreviewController({
       return;
     }
 
-    const missingPreviewSongIds = songs
-      .map((song) => song.id)
-      .filter((songId) => {
-        const preview = previewBySongId[songId] ?? getCachedPreview(songId);
-        return !preview?.coverUrl || !preview.previewUrl;
-      });
+    const targetSongIds = prefetchSongIds ?? songs.map((song) => song.id);
+    const missingPreviewSongIds = getMissingPreviewSongIds({
+      cachedPreviewBySongId: previewBySongId,
+      getCachedPreviewBySongId: getCachedPreview,
+      songIds: targetSongIds,
+    });
 
     if (missingPreviewSongIds.length === 0) {
       return;
@@ -135,7 +153,7 @@ export function useSongPreviewController({
     void Promise.allSettled(
       missingPreviewSongIds.map((songId) => prefetchSongPreview(songId)),
     );
-  }, [prefetchPreviews, previewBySongId, songs]);
+  }, [prefetchPreviews, prefetchSongIds, previewBySongId, songs]);
 
   const selectedPreviewSong = useMemo(
     () =>

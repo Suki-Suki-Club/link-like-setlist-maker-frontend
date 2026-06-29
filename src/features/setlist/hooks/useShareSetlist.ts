@@ -41,6 +41,27 @@ export function createSetlistSavePayload(
   };
 }
 
+export function canSaveShareUrlOnce({
+  hasIssuedShareUrl,
+  prediction,
+}: {
+  hasIssuedShareUrl: boolean;
+  prediction: SetlistPrediction;
+}) {
+  return !hasIssuedShareUrl && prediction.songIds.length > 0;
+}
+
+export function getShareSaveButtonLabel(hasIssuedShareUrl: boolean) {
+  return hasIssuedShareUrl ? "保存済み" : "保存してURLをコピー";
+}
+
+export function getSharedSetlistCreateAction() {
+  return {
+    href: "/home",
+    label: "自分も作成する",
+  };
+}
+
 export function useShareSetlist() {
   const [shareStatus, setShareStatus] = useState("");
   const [issuedSharePath, setIssuedSharePath] = useState<string | null>(null);
@@ -82,7 +103,7 @@ export function useShareSetlist() {
     prediction: SetlistPrediction,
     setlistTitle: string,
   ) {
-    if (prediction.songIds.length === 0) {
+    if (!canSaveShareUrlOnce({ hasIssuedShareUrl, prediction })) {
       return;
     }
 

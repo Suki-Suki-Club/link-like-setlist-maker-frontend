@@ -76,7 +76,8 @@ export function SetlistMaker({
     stopSongHoverPreview,
   } = useSongPreviewController({
     canPlaySound,
-    prefetchPreviews: currentStep === "songs",
+    prefetchPreviews: currentStep === "songs" || isReadOnlyShareView,
+    prefetchSongIds: isReadOnlyShareView ? editor.songIds : undefined,
     songMap,
     soundVolume,
     songs,

@@ -127,3 +127,24 @@ test("preview refresh uses newer media URLs when present", () => {
     },
   );
 });
+
+test("missing preview lookup can be limited to shared setlist songs", () => {
+  const { getMissingPreviewSongIds } = loadSongPreviewControllerModule();
+
+  assert.deepEqual(
+    getMissingPreviewSongIds({
+      cachedPreviewBySongId: {
+        "song-1": {
+          cachedAt: 100,
+          coverUrl: "https://example.com/cover.jpg",
+          previewUrl: "https://example.com/preview.mp3",
+          status: "found",
+          title: "Song 1",
+        },
+      },
+      getCachedPreviewBySongId: () => null,
+      songIds: ["song-1", "song-2"],
+    }),
+    ["song-2"],
+  );
+});

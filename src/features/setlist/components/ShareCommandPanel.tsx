@@ -1,6 +1,7 @@
 "use client";
 
 import type { LoveLiveSeries } from "../types";
+import { getShareSaveButtonLabel } from "../hooks/useShareSetlist";
 
 type ShareCommandPanelProps = {
   canSaveShareUrl: boolean;
@@ -98,10 +99,14 @@ export function ShareCommandPanel({
           <button
             type="button"
             className="h-14 border-2 border-black bg-black px-4 text-sm font-black tracking-[0.18em] text-white shadow-[6px_6px_0_#e11d48] transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:border-zinc-300 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none"
-            disabled={!canSaveShareUrl || setlistTitle.trim().length === 0}
+            disabled={
+              hasIssuedShareUrl ||
+              !canSaveShareUrl ||
+              setlistTitle.trim().length === 0
+            }
             onClick={onSaveShareUrl}
           >
-            保存してURLをコピー
+            {getShareSaveButtonLabel(hasIssuedShareUrl)}
           </button>
           <button
             type="button"

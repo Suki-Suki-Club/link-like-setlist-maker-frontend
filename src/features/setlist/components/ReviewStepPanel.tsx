@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import type { LoveLiveSeries, SetlistBreak, Song } from "../types";
+import { getSharedSetlistCreateAction } from "../hooks/useShareSetlist";
 import { SetlistBreakDivider } from "./SetlistBreakDivider";
 import { ReviewSongRow } from "./ReviewSongRow";
 import { ShareCommandPanel } from "./ShareCommandPanel";
@@ -48,6 +50,8 @@ export function ReviewStepPanel({
   shareUrl,
   visibleSetlistBreaks,
 }: ReviewStepPanelProps) {
+  const sharedCreateAction = getSharedSetlistCreateAction();
+
   return (
     <section className="relative overflow-hidden border-4 border-black bg-white shadow-[14px_14px_0_#111]">
       <div className="absolute inset-x-0 top-0 h-4 bg-rose-600" />
@@ -67,7 +71,14 @@ export function ReviewStepPanel({
               {selectedGroup ?? "-"} / {selectedSongs.length} SONGS
             </p>
           </div>
-          {readOnly ? null : (
+          {readOnly ? (
+            <Link
+              href={sharedCreateAction.href}
+              className="flex h-11 items-center justify-center border-2 border-black bg-black px-4 text-sm font-black tracking-[0.12em] text-white shadow-[5px_5px_0_#e11d48] transition hover:bg-rose-600"
+            >
+              {sharedCreateAction.label}
+            </Link>
+          ) : (
             <button
               type="button"
               className="h-11 border-2 border-black bg-white px-4 text-sm font-black tracking-[0.12em] text-zinc-950 shadow-[5px_5px_0_#111] transition hover:bg-zinc-100"

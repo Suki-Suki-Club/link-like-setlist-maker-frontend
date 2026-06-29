@@ -118,3 +118,45 @@ test("setlist save payload stores MC and interlude breaks", () => {
     },
   );
 });
+
+test("share URL save is allowed only before a URL has been issued", () => {
+  const { canSaveShareUrlOnce } = loadShareSetlistModule();
+
+  assert.equal(
+    canSaveShareUrlOnce({
+      hasIssuedShareUrl: false,
+      prediction: { songIds: ["dream-believers"], encoreAfters: [], breaks: [] },
+    }),
+    true,
+  );
+  assert.equal(
+    canSaveShareUrlOnce({
+      hasIssuedShareUrl: true,
+      prediction: { songIds: ["dream-believers"], encoreAfters: [], breaks: [] },
+    }),
+    false,
+  );
+  assert.equal(
+    canSaveShareUrlOnce({
+      hasIssuedShareUrl: false,
+      prediction: { songIds: [], encoreAfters: [], breaks: [] },
+    }),
+    false,
+  );
+});
+
+test("share URL save button reflects issued state", () => {
+  const { getShareSaveButtonLabel } = loadShareSetlistModule();
+
+  assert.equal(getShareSaveButtonLabel(false), "保存してURLをコピー");
+  assert.equal(getShareSaveButtonLabel(true), "保存済み");
+});
+
+test("shared setlist create action links to the maker entry", () => {
+  const { getSharedSetlistCreateAction } = loadShareSetlistModule();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(getSharedSetlistCreateAction())), {
+    href: "/home",
+    label: "自分も作成する",
+  });
+});
