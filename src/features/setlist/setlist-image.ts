@@ -71,7 +71,7 @@ export function createSetlistImageFilename(createdAt = new Date()) {
 }
 
 export function createSetlistCoverProxyUrl(songId: string) {
-  return `/api/song-previews/${encodeURIComponent(songId)}/cover`;
+  return `/api/song-media/${encodeURIComponent(songId)}/cover`;
 }
 
 export function createSetlistImageModel({

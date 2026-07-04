@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "link-like-setlist-maker",
+  "account_id": "6d892072a532ebdf09c8f3d1f9315c17",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "link-like-setlist-maker.sukisuki.club",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "BACKEND_API_BASE_URL": "https://link-like-setlist-maker-backend-846528905316.asia-northeast1.run.app"
+  },
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  }
+}

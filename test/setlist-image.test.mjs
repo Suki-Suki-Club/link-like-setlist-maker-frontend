@@ -79,8 +79,8 @@ test("createSetlistImageModel orders songs and breaks for the export card", () =
 
   const model = createSetlistImageModel({
     coverUrlBySongId: {
-      "song-1": "/api/song-previews/song-1/cover",
-      "song-3": "/api/song-previews/song-3/cover",
+      "song-1": "/api/song-media/song-1/cover",
+      "song-3": "/api/song-media/song-3/cover",
     },
     createdAt: new Date("2026-06-28T09:07:00+09:00"),
     selectedGroup: "蓮ノ空女学院スクールアイドルクラブ",
@@ -112,9 +112,9 @@ test("createSetlistImageModel orders songs and breaks for the export card", () =
       .map((item) => item.cover),
     )),
     [
-      { kind: "image", url: "/api/song-previews/song-1/cover" },
+      { kind: "image", url: "/api/song-media/song-1/cover" },
       { kind: "placeholder" },
-      { kind: "image", url: "/api/song-previews/song-3/cover" },
+      { kind: "image", url: "/api/song-media/song-3/cover" },
     ],
   );
 });

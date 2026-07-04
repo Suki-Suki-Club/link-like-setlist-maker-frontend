@@ -1,59 +1,108 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { Song } from "../types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  getCoverUrlsForGroup,
+  preloadImageUrls,
+} from "../song-catalog-loading";
+import type { LoveLiveSeries, Song } from "../types";
+import {
+  createCachedPreviewsFromMediaBySongId,
+  type CachedSongPreview,
+  type SongMediaResponse,
+} from "./useSongPreviewController";
 
-type SongsResponse = {
+type CatalogBootstrapResponse = {
+  mediaBySongId?: Record<string, SongMediaResponse>;
   songs: Song[];
 };
 
-export function useSongsCatalog() {
+type UseSongsCatalogOptions = {
+  autoLoad?: boolean;
+};
+
+export function useSongsCatalog({ autoLoad = false }: UseSongsCatalogOptions = {}) {
   const [songs, setSongs] = useState<Song[]>([]);
+  const [bootstrapPreviewBySongId, setBootstrapPreviewBySongId] = useState<
+    Record<string, CachedSongPreview>
+  >({});
   const [songsError, setSongsError] = useState("");
-  const [isSongsLoading, setIsSongsLoading] = useState(true);
+  const [isSongsLoading, setIsSongsLoading] = useState(autoLoad);
+  const loadRequestIdRef = useRef(0);
 
-  useEffect(() => {
-    let isCancelled = false;
+  const loadSongsCatalog = useCallback(
+    async (selectedGroup: LoveLiveSeries | null = null) => {
+      const requestId = loadRequestIdRef.current + 1;
+      loadRequestIdRef.current = requestId;
 
-    async function loadSongs() {
       setIsSongsLoading(true);
+      setSongsError("");
 
       try {
-        const response = await fetch("/api/songs", {
+        const response = await fetch("/api/catalog/bootstrap", {
           cache: "no-store",
         });
-        const payload = (await response.json()) as SongsResponse;
+        const payload = (await response.json()) as CatalogBootstrapResponse;
 
         if (!response.ok) {
-          throw new Error("Songs request failed");
+          throw new Error("Catalog bootstrap request failed");
         }
 
-        if (isCancelled) {
-          return;
+        const titleBySongId = new Map(
+          payload.songs.map((song) => [song.id, song.title]),
+        );
+        const previewBySongId = createCachedPreviewsFromMediaBySongId(
+          payload.mediaBySongId ?? {},
+          Date.now(),
+          (songId) => titleBySongId.get(songId) ?? "",
+        );
+        await preloadImageUrls(
+          getCoverUrlsForGroup({
+            previewBySongId,
+            selectedGroup,
+            songs: payload.songs,
+          }),
+        );
+
+        if (loadRequestIdRef.current !== requestId) {
+          return false;
         }
 
         setSongs(payload.songs);
+        setBootstrapPreviewBySongId(previewBySongId);
         setSongsError("");
+        return true;
       } catch {
-        if (isCancelled) {
-          return;
+        if (loadRequestIdRef.current !== requestId) {
+          return false;
         }
 
         setSongs([]);
+        setBootstrapPreviewBySongId({});
         setSongsError("楽曲情報を取得できません");
+        return false;
       } finally {
-        if (!isCancelled) {
+        if (loadRequestIdRef.current === requestId) {
           setIsSongsLoading(false);
         }
       }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!autoLoad) {
+      return;
     }
 
-    void loadSongs();
+    const timeoutId = window.setTimeout(() => {
+      void loadSongsCatalog();
+    }, 0);
 
     return () => {
-      isCancelled = true;
+      window.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [autoLoad, loadSongsCatalog]);
 
   const songMap = useMemo(
     () => new Map(songs.map((song) => [song.id, song])),
@@ -61,7 +110,9 @@ export function useSongsCatalog() {
   );
 
   return {
+    bootstrapPreviewBySongId,
     isSongsLoading,
+    loadSongsCatalog,
     setSongsError,
     songMap,
     songs,

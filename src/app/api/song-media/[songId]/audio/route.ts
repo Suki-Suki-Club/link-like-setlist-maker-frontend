@@ -1,4 +1,13 @@
-import { fetchSongPreview, type SongPreviewResponse } from "../../shared";
+import { fetchSongMedia, type SongMediaResponse } from "../../shared";
+
+type CloudflareFetchInit = RequestInit & {
+  cf?: {
+    cacheEverything?: boolean;
+    cacheTtl?: number;
+  };
+};
+
+const audioCacheTtlSeconds = 7 * 24 * 60 * 60;
 
 function pickHeader(headers: Headers, name: string) {
   const value = headers.get(name);
@@ -10,36 +19,38 @@ export async function GET(
   { params }: { params: Promise<{ songId: string }> },
 ) {
   const { songId } = await params;
-  const refresh = new URL(request.url).searchParams.get("refresh") !== "false";
 
   try {
-    const previewResponse = await fetchSongPreview(songId, refresh);
-    const previewPayload =
-      (await previewResponse.json()) as SongPreviewResponse;
-    const previewUrl = previewPayload.preview?.previewUrl;
+    const mediaResponse = await fetchSongMedia(songId);
+    const mediaPayload = (await mediaResponse.json()) as SongMediaResponse;
+    const previewUrl = mediaPayload.media?.previewUrl;
 
     if (
-      !previewResponse.ok ||
-      previewPayload.status !== "found" ||
+      !mediaResponse.ok ||
+      mediaPayload.status !== "available" ||
       !previewUrl
     ) {
       return Response.json(
         {
-          code: "PREVIEW_NOT_AVAILABLE",
+          code: "MEDIA_NOT_AVAILABLE",
           message: "Preview audio is unavailable",
         },
-        { status: previewResponse.status || 404 },
+        { status: mediaResponse.ok ? 404 : mediaResponse.status },
       );
     }
 
-    const upstreamResponse = await fetch(previewUrl, {
+    const audioRequestInit: CloudflareFetchInit = {
       headers: {
         ...(pickHeader(request.headers, "range")
           ? { range: pickHeader(request.headers, "range")! }
           : {}),
       },
-      cache: "no-store",
-    });
+      cf: {
+        cacheEverything: true,
+        cacheTtl: audioCacheTtlSeconds,
+      },
+    };
+    const upstreamResponse = await fetch(previewUrl, audioRequestInit);
 
     if (!upstreamResponse.ok || !upstreamResponse.body) {
       return Response.json(
@@ -52,11 +63,11 @@ export async function GET(
     }
 
     const responseHeaders = new Headers({
+      "accept-ranges":
+        upstreamResponse.headers.get("accept-ranges") ?? "bytes",
       "cache-control": "no-store",
       "content-type":
         upstreamResponse.headers.get("content-type") ?? "audio/mpeg",
-      "accept-ranges":
-        upstreamResponse.headers.get("accept-ranges") ?? "bytes",
     });
 
     const contentLength = upstreamResponse.headers.get("content-length");
@@ -77,7 +88,7 @@ export async function GET(
     return Response.json(
       {
         code: "BACKEND_UNAVAILABLE",
-        message: "Preview backend is unavailable",
+        message: "Song media backend is unavailable",
       },
       { status: 503 },
     );

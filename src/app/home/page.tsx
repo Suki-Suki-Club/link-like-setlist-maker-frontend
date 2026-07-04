@@ -36,6 +36,8 @@ export default async function HomePage({
     redirect('/home')
   }
 
+  const startFresh = params.get('fresh') === '1'
+
   return (
     <Suspense
       fallback={
@@ -44,7 +46,7 @@ export default async function HomePage({
         </main>
       }
     >
-      <SetlistMaker />
+      <SetlistMaker startFresh={startFresh} />
     </Suspense>
   )
 }

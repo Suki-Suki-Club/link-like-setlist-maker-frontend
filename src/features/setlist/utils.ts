@@ -92,6 +92,29 @@ export function reorderItems<T>(
   return nextItems;
 }
 
+export function insertItem<T>(items: T[], index: number, item: T) {
+  if (index < 0 || index > items.length) {
+    return items;
+  }
+
+  return [...items.slice(0, index), item, ...items.slice(index)];
+}
+
+export function getSetlistBreaksAfterInsertedSong(
+  breaks: SetlistBreak[],
+  insertIndex: number,
+  nextSongCount: number,
+) {
+  return getValidSetlistBreaks(
+    breaks.map((breakItem) => ({
+      ...breakItem,
+      after:
+        insertIndex <= breakItem.after ? breakItem.after + 1 : breakItem.after,
+    })),
+    nextSongCount,
+  );
+}
+
 export function getEncoreLabel(order: number) {
   return order === 0 ? "ENCORE" : "DOUBLE ENCORE";
 }

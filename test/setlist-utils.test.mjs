@@ -68,6 +68,36 @@ test("reorderItems ignores noop and out-of-range moves", () => {
   assert.equal(reorderItems(source, 1, 3), source);
 });
 
+test("insertItem inserts an item at the requested position without mutating the source array", () => {
+  const { insertItem } = loadUtilsModule();
+  const source = ["first", "third"];
+
+  assert.deepEqual([...insertItem(source, 0, "zero")], [
+    "zero",
+    "first",
+    "third",
+  ]);
+  assert.deepEqual([...insertItem(source, 1, "second")], [
+    "first",
+    "second",
+    "third",
+  ]);
+  assert.deepEqual([...insertItem(source, 2, "fourth")], [
+    "first",
+    "third",
+    "fourth",
+  ]);
+  assert.deepEqual(source, ["first", "third"]);
+});
+
+test("insertItem ignores out-of-range insertion positions", () => {
+  const { insertItem } = loadUtilsModule();
+  const source = ["first", "second"];
+
+  assert.equal(insertItem(source, -1, "zero"), source);
+  assert.equal(insertItem(source, 3, "third"), source);
+});
+
 test("getValidSetlistBreaks keeps one break per song gap and limits encores", () => {
   const { getValidSetlistBreaks } = loadUtilsModule();
 
@@ -88,6 +118,29 @@ test("getValidSetlistBreaks keeps one break per song gap and limits encores", ()
       { after: 1, type: "encore" },
       { after: 2, type: "interlude" },
       { after: 3, type: "encore" },
+    ],
+  );
+});
+
+test("getSetlistBreaksAfterInsertedSong shifts breaks that belong to following songs", () => {
+  const { getSetlistBreaksAfterInsertedSong } = loadUtilsModule();
+
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(
+        getSetlistBreaksAfterInsertedSong(
+          [
+            { after: 0, type: "mc" },
+            { after: 1, type: "interlude" },
+          ],
+          1,
+          4,
+        ),
+      ),
+    ),
+    [
+      { after: 0, type: "mc" },
+      { after: 2, type: "interlude" },
     ],
   );
 });
