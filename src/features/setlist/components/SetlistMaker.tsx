@@ -300,6 +300,11 @@ export function SetlistMaker({
           <p className="text-2xl font-black text-zinc-950">
             {isSongsLoading ? "楽曲情報を取得中" : songsError}
           </p>
+          {isSongsLoading ? (
+            <p className="text-sm font-bold text-zinc-500">
+              初回ロード時は時間がかかる場合があります
+            </p>
+          ) : null}
         </section>
       ) : null}
 
