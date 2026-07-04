@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import type { RefObject } from "react";
 import type { LoveLiveSeries, SetlistBreak, Song } from "../types";
-import { getSharedSetlistCreateAction } from "../hooks/useShareSetlist";
+import { getSharedSetlistFreshCreateAction } from "../hooks/useShareSetlist";
 import { SetlistBreakDivider } from "./SetlistBreakDivider";
 import { ReviewSongRow } from "./ReviewSongRow";
+import { SetlistShareImageCard } from "./SetlistShareImageCard";
 import { ShareCommandPanel } from "./ShareCommandPanel";
 
 type ReviewStepPanelProps = {
   canSaveShareUrl: boolean;
   coverUrlBySongId: Record<string, string | null>;
   hasIssuedShareUrl: boolean;
+  imageCaptureRef: RefObject<HTMLDivElement | null>;
   imageSaveStatus: string;
   isSavingImage: boolean;
   onBackToSongs: () => void;
@@ -33,6 +36,7 @@ export function ReviewStepPanel({
   canSaveShareUrl,
   coverUrlBySongId,
   hasIssuedShareUrl,
+  imageCaptureRef,
   imageSaveStatus,
   isSavingImage,
   onBackToSongs,
@@ -50,7 +54,7 @@ export function ReviewStepPanel({
   shareUrl,
   visibleSetlistBreaks,
 }: ReviewStepPanelProps) {
-  const sharedCreateAction = getSharedSetlistCreateAction();
+  const sharedFreshCreateAction = getSharedSetlistFreshCreateAction();
 
   return (
     <section className="relative overflow-hidden border-4 border-black bg-white shadow-[14px_14px_0_#111]">
@@ -59,7 +63,7 @@ export function ReviewStepPanel({
       <div className="absolute right-[-56px] top-0 hidden h-full w-28 skew-x-[-18deg] bg-black sm:block" />
 
       <div className="relative z-10 border-b-4 border-black bg-white px-4 pb-4 pt-7 sm:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
           <div>
             <p className="text-[11px] font-black tracking-[0.28em] text-rose-600">
               {readOnly ? "SHARED VIEW" : "SAVE PREVIEW"}
@@ -71,22 +75,6 @@ export function ReviewStepPanel({
               {selectedGroup ?? "-"} / {selectedSongs.length} SONGS
             </p>
           </div>
-          {readOnly ? (
-            <Link
-              href={sharedCreateAction.href}
-              className="flex h-11 items-center justify-center border-2 border-black bg-black px-4 text-sm font-black tracking-[0.12em] text-white shadow-[5px_5px_0_#e11d48] transition hover:bg-rose-600"
-            >
-              {sharedCreateAction.label}
-            </Link>
-          ) : (
-            <button
-              type="button"
-              className="h-11 border-2 border-black bg-white px-4 text-sm font-black tracking-[0.12em] text-zinc-950 shadow-[5px_5px_0_#111] transition hover:bg-zinc-100"
-              onClick={onBackToSongs}
-            >
-              曲選択へ戻る
-            </button>
-          )}
         </div>
       </div>
 
@@ -116,6 +104,17 @@ export function ReviewStepPanel({
             ))}
           </ol>
         )}
+
+        {readOnly ? (
+          <div className="mt-6 flex justify-end">
+            <Link
+              href={sharedFreshCreateAction.href}
+              className="flex min-h-12 items-center justify-center border-2 border-black bg-black px-5 text-sm font-black tracking-[0.12em] text-white shadow-[5px_5px_0_#e11d48] transition hover:bg-rose-600"
+            >
+              {sharedFreshCreateAction.label}
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       {readOnly ? null : (
@@ -135,6 +134,22 @@ export function ReviewStepPanel({
           shareUrl={shareUrl}
           songCount={selectedSongs.length}
         />
+      )}
+
+      {readOnly ? null : (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed left-[-10000px] top-0 z-[-1]"
+        >
+          <SetlistShareImageCard
+            ref={imageCaptureRef}
+            coverUrlBySongId={coverUrlBySongId}
+            selectedGroup={selectedGroup}
+            selectedSongs={selectedSongs}
+            setlistTitle={setlistTitle}
+            visibleSetlistBreaks={visibleSetlistBreaks}
+          />
+        </div>
       )}
     </section>
   );

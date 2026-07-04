@@ -24,21 +24,43 @@ import type {
 } from "../types";
 import {
   getEncoreAftersFromBreaks,
+  getSetlistBreaksAfterInsertedSong,
   getValidSetlistBreaks,
+  insertItem,
   isGroupSelectable,
   normalizeText,
   reorderItems,
 } from "../utils";
 
-export type SetlistSlot = {
+export type SetlistSlotAction = "replace" | "insert" | "append";
+
+export type SetlistSlot =
+  | {
+      action: "insert";
+      index: number;
+      song: null;
+    }
+  | {
+      action: "replace";
+      index: number;
+      song: Song | null;
+    }
+  | {
+      action: "append";
+      index: number;
+      song: null;
+    };
+
+type ActiveSetlistSlot = {
   index: number;
-  song: Song | null;
+  action: SetlistSlotAction;
 };
 
 type UseSetlistEditorOptions = {
   enableDraftStorage?: boolean;
   onDraftRestored?: (draft: SetlistDraft) => void;
   onDirty: () => void;
+  resetStoredDraftOnLoad?: boolean;
   songMap: Map<string, Song>;
   songs: Song[];
 };
@@ -47,6 +69,7 @@ export function useSetlistEditor({
   enableDraftStorage = true,
   onDraftRestored,
   onDirty,
+  resetStoredDraftOnLoad = false,
   songMap,
   songs,
 }: UseSetlistEditorOptions) {
@@ -59,7 +82,7 @@ export function useSetlistEditor({
   const [songIds, setSongIds] = useState<string[]>([]);
   const [setlistBreaks, setSetlistBreaks] = useState<SetlistBreak[]>([]);
   const [isSongPickerOpen, setIsSongPickerOpen] = useState(false);
-  const [activeSlotIndex, setActiveSlotIndex] = useState<number | null>(null);
+  const [activeSlot, setActiveSlot] = useState<ActiveSetlistSlot | null>(null);
   const hasRestoredDraftRef = useRef(false);
   const restoreDraftState = useEffectEvent((draft: SetlistDraft) => {
     setSelectedGroup(draft.selectedGroup);
@@ -73,7 +96,7 @@ export function useSetlistEditor({
     setSongIds(draft.songIds);
     setSetlistBreaks(draft.breaks);
     setIsSongPickerOpen(false);
-    setActiveSlotIndex(null);
+    setActiveSlot(null);
     onDraftRestored?.(draft);
   });
 
@@ -118,19 +141,31 @@ export function useSetlistEditor({
     });
   }, [keyword, selectedGroup, selectedUnit, songs]);
 
-  const setlistSlots = useMemo<SetlistSlot[]>(
-    () => [
-      ...songIds.map((songId, index) => ({
-        index,
-        song: songMap.get(songId) ?? null,
-      })),
+  const setlistSlots = useMemo<SetlistSlot[]>(() => {
+    if (songIds.length === 0) {
+      return [{ action: "append", index: 0, song: null }];
+    }
+
+    return [
+      ...songIds.flatMap<SetlistSlot>((songId, index) => [
+        {
+          action: "insert",
+          index,
+          song: null,
+        },
+        {
+          action: "replace",
+          index,
+          song: songMap.get(songId) ?? null,
+        },
+      ]),
       {
+        action: "append",
         index: songIds.length,
         song: null,
       },
-    ],
-    [songIds, songMap],
-  );
+    ];
+  }, [songIds, songMap]);
 
   const prediction = useMemo<SetlistPrediction>(
     () => {
@@ -176,6 +211,11 @@ export function useSetlistEditor({
 
     hasRestoredDraftRef.current = true;
 
+    if (resetStoredDraftOnLoad) {
+      removeStoredSetlistDraft();
+      return;
+    }
+
     const storedDraft = readStoredSetlistDraft();
 
     if (!storedDraft) {
@@ -192,14 +232,14 @@ export function useSetlistEditor({
     }
 
     queueMicrotask(() => restoreDraftState(restoredDraft));
-  }, [enableDraftStorage, songs]);
+  }, [enableDraftStorage, resetStoredDraftOnLoad, songs]);
 
   function openGroupSelection() {
     setPendingGroup(
       selectedGroup && isGroupSelectable(selectedGroup) ? selectedGroup : null,
     );
     setIsSongPickerOpen(false);
-    setActiveSlotIndex(null);
+    setActiveSlot(null);
   }
 
   function chooseGroup(group: LoveLiveSeries) {
@@ -212,35 +252,49 @@ export function useSetlistEditor({
     setSelectedUnit(ALL_UNITS_OPTION);
     setKeyword("");
     setIsSongPickerOpen(false);
-    setActiveSlotIndex(null);
+    setActiveSlot(null);
     saveDraft(group, songIds, setlistBreaks);
     onDirty();
   }
 
-  function openSongPicker(slotIndex: number) {
-    setActiveSlotIndex(slotIndex);
+  function openSongPicker(
+    slotIndex: number,
+    action: SetlistSlotAction = "replace",
+  ) {
+    setActiveSlot({ index: slotIndex, action });
     setIsSongPickerOpen(true);
   }
 
   function closeSongPicker() {
     setIsSongPickerOpen(false);
-    setActiveSlotIndex(null);
+    setActiveSlot(null);
   }
 
   function assignSongToSlot(songId: string) {
-    if (activeSlotIndex === null) {
+    if (activeSlot === null) {
       return;
     }
 
     const nextSongIds =
-      activeSlotIndex >= songIds.length
-        ? [...songIds, songId]
-        : songIds.map((currentSongId, currentIndex) =>
-            currentIndex === activeSlotIndex ? songId : currentSongId,
-          );
+      activeSlot.action === "insert"
+        ? insertItem(songIds, activeSlot.index, songId)
+        : activeSlot.action === "append" || activeSlot.index >= songIds.length
+          ? [...songIds, songId]
+          : songIds.map((currentSongId, currentIndex) =>
+              currentIndex === activeSlot.index ? songId : currentSongId,
+            );
+    const nextSetlistBreaks =
+      activeSlot.action === "insert" && nextSongIds !== songIds
+        ? getSetlistBreaksAfterInsertedSong(
+            setlistBreaks,
+            activeSlot.index,
+            nextSongIds.length,
+          )
+        : setlistBreaks;
 
     setSongIds(nextSongIds);
-    saveDraft(selectedGroup, nextSongIds, setlistBreaks);
+    setSetlistBreaks(nextSetlistBreaks);
+    saveDraft(selectedGroup, nextSongIds, nextSetlistBreaks);
     onDirty();
     closeSongPicker();
   }
@@ -377,7 +431,7 @@ export function useSetlistEditor({
   }
 
   return {
-    activeSlotIndex,
+    activeSlotIndex: activeSlot?.index ?? null,
     applySharedSetlist,
     assignSongToSlot,
     canConfirmGroupSelection,

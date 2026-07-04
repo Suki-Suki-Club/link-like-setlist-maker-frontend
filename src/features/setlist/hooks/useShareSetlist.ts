@@ -55,10 +55,20 @@ export function getShareSaveButtonLabel(hasIssuedShareUrl: boolean) {
   return hasIssuedShareUrl ? "保存済み" : "保存してURLをコピー";
 }
 
-export function getSharedSetlistCreateAction() {
+export function createXShareUrl(shareUrl: string, setlistTitle: string) {
+  if (!shareUrl) {
+    return "";
+  }
+
+  const text = `${setlistTitle.trim() || DEFAULT_SETLIST_TITLE}\n${shareUrl}\n#リンクラセトリメーカー #ラブライブセトリメーカー`;
+
+  return `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
+}
+
+export function getSharedSetlistFreshCreateAction() {
   return {
-    href: "/home",
-    label: "自分も作成する",
+    href: "/home?fresh=1",
+    label: "マイセトリを考える",
   };
 }
 

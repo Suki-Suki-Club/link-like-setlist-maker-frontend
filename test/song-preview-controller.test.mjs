@@ -26,10 +26,6 @@ function loadSongPreviewControllerModule() {
         return {};
       }
 
-      if (specifier === "../preview-cache") {
-        return {};
-      }
-
       throw new Error(`Unexpected import: ${specifier}`);
     },
   });
@@ -64,7 +60,7 @@ test("inactive preview audio is not reused for a repeated song request", () => {
   );
 });
 
-test("preview refresh keeps an existing cover when the new response has none", () => {
+test("media merge keeps an existing cover when the new response has none", () => {
   const { mergeCachedSongPreview } = loadSongPreviewControllerModule();
 
   assert.deepEqual(
@@ -74,14 +70,14 @@ test("preview refresh keeps an existing cover when the new response has none", (
           cachedAt: 100,
           coverUrl: "https://example.com/cover.jpg",
           previewUrl: "https://example.com/preview.mp3",
-          status: "found",
+          status: "available",
           title: "Cached title",
         },
         {
           cachedAt: 200,
           coverUrl: null,
           previewUrl: null,
-          status: "not_found",
+          status: "unavailable",
           title: "Refresh title",
         },
       ),
@@ -90,13 +86,13 @@ test("preview refresh keeps an existing cover when the new response has none", (
       cachedAt: 200,
       coverUrl: "https://example.com/cover.jpg",
       previewUrl: "https://example.com/preview.mp3",
-      status: "found",
+      status: "available",
       title: "Refresh title",
     },
   );
 });
 
-test("preview refresh uses newer media URLs when present", () => {
+test("media merge uses newer media URLs when present", () => {
   const { mergeCachedSongPreview } = loadSongPreviewControllerModule();
 
   assert.deepEqual(
@@ -106,14 +102,14 @@ test("preview refresh uses newer media URLs when present", () => {
           cachedAt: 100,
           coverUrl: "https://example.com/old-cover.jpg",
           previewUrl: "https://example.com/old-preview.mp3",
-          status: "found",
+          status: "available",
           title: "Cached title",
         },
         {
           cachedAt: 200,
           coverUrl: "https://example.com/new-cover.jpg",
           previewUrl: "https://example.com/new-preview.mp3",
-          status: "found",
+          status: "available",
           title: "Refresh title",
         },
       ),
@@ -122,7 +118,7 @@ test("preview refresh uses newer media URLs when present", () => {
       cachedAt: 200,
       coverUrl: "https://example.com/new-cover.jpg",
       previewUrl: "https://example.com/new-preview.mp3",
-      status: "found",
+      status: "available",
       title: "Refresh title",
     },
   );
@@ -136,15 +132,112 @@ test("missing preview lookup can be limited to shared setlist songs", () => {
       cachedPreviewBySongId: {
         "song-1": {
           cachedAt: 100,
-          coverUrl: "https://example.com/cover.jpg",
-          previewUrl: "https://example.com/preview.mp3",
-          status: "found",
+          coverUrl: "/api/song-media/song-1/cover",
+          previewUrl: "/api/song-media/song-1/audio",
+          status: "available",
           title: "Song 1",
         },
       },
-      getCachedPreviewBySongId: () => null,
+      getFallbackPreviewBySongId: () => null,
       songIds: ["song-1", "song-2"],
     }),
     ["song-2"],
+  );
+});
+
+test("external cached media URLs are treated as missing for display", () => {
+  const { getMissingPreviewSongIds } = loadSongPreviewControllerModule();
+
+  assert.deepEqual(
+    getMissingPreviewSongIds({
+      cachedPreviewBySongId: {
+        "song-1": {
+          cachedAt: 100,
+          coverUrl: "https://example.com/cover.jpg",
+          previewUrl: "https://example.com/preview.mp3",
+          status: "available",
+          title: "Song 1",
+        },
+      },
+      getFallbackPreviewBySongId: () => null,
+      songIds: ["song-1"],
+    }),
+    ["song-1"],
+  );
+});
+
+test("unavailable media is not repeatedly prefetched", () => {
+  const { getMissingPreviewSongIds } = loadSongPreviewControllerModule();
+
+  assert.deepEqual(
+    getMissingPreviewSongIds({
+      cachedPreviewBySongId: {
+        "song-1": {
+          cachedAt: 100,
+          coverUrl: null,
+          previewUrl: null,
+          status: "unavailable",
+          title: "Song 1",
+        },
+      },
+      getFallbackPreviewBySongId: () => null,
+      songIds: ["song-1", "song-2"],
+    }),
+    ["song-2"],
+  );
+});
+
+test("bootstrap media responses are converted to cached previews by song id", () => {
+  const { createCachedPreviewsFromMediaBySongId } =
+    loadSongPreviewControllerModule();
+
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(
+        createCachedPreviewsFromMediaBySongId(
+          {
+            "song-1": {
+              songId: "song-1",
+              status: "available",
+              media: {
+                albumTitle: null,
+                artistName: "Artist",
+                coverUrl: "https://example.com/cover.jpg",
+                deezerTrackId: 123,
+                duration: 120,
+                isrc: null,
+                previewUrl: "https://example.com/preview.mp3",
+                rank: null,
+                title: "Batch title",
+                trackLink: null,
+              },
+            },
+            "song-2": {
+              songId: "song-2",
+              status: "unavailable",
+              media: null,
+            },
+          },
+          12345,
+          (songId) => `Fallback ${songId}`,
+        ),
+      ),
+    ),
+    {
+      "song-1": {
+        cachedAt: 12345,
+        coverUrl: "/api/song-media/song-1/cover",
+        previewUrl: "/api/song-media/song-1/audio",
+        status: "available",
+        title: "Batch title",
+      },
+      "song-2": {
+        cachedAt: 12345,
+        coverUrl: null,
+        previewUrl: null,
+        status: "unavailable",
+        title: "Fallback song-2",
+      },
+    },
   );
 });

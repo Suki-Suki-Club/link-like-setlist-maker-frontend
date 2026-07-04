@@ -152,11 +152,34 @@ test("share URL save button reflects issued state", () => {
   assert.equal(getShareSaveButtonLabel(true), "保存済み");
 });
 
-test("shared setlist create action links to the maker entry", () => {
-  const { getSharedSetlistCreateAction } = loadShareSetlistModule();
+test("X share URL points to the tweet intent with the setlist URL", () => {
+  const { createXShareUrl } = loadShareSetlistModule();
 
-  assert.deepEqual(JSON.parse(JSON.stringify(getSharedSetlistCreateAction())), {
-    href: "/home",
-    label: "自分も作成する",
-  });
+  assert.equal(createXShareUrl("", "My Setlist"), "");
+
+  const shareUrl = createXShareUrl(
+    "https://example.com/shared/setlist-1",
+    "My Setlist",
+  );
+  const parsedUrl = new URL(shareUrl);
+
+  assert.equal(parsedUrl.origin, "https://x.com");
+  assert.equal(parsedUrl.pathname, "/intent/tweet");
+  assert.equal(parsedUrl.searchParams.get("url"), null);
+  assert.equal(
+    parsedUrl.searchParams.get("text"),
+    "My Setlist\nhttps://example.com/shared/setlist-1\n#リンクラセトリメーカー #ラブライブセトリメーカー",
+  );
+});
+
+test("shared setlist create action links to the maker entry", () => {
+  const { getSharedSetlistFreshCreateAction } = loadShareSetlistModule();
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(getSharedSetlistFreshCreateAction())),
+    {
+      href: "/home?fresh=1",
+      label: "マイセトリを考える",
+    },
+  );
 });

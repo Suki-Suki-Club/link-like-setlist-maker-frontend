@@ -1,5 +1,8 @@
 .tmp/
 .env
+.dev.vars
+.omc/
+tsconfig.tsbuildinfo
 
 # Logs
 logs
@@ -12,6 +15,8 @@ lerna-debug.log*
 
 node_modules
 .next
+.open-next
+.wrangler
 out
 dist
 dist-ssr

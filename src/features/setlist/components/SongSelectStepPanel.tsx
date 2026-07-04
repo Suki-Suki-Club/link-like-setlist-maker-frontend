@@ -7,7 +7,10 @@ import type {
   SetlistBreakType,
   Song,
 } from "../types";
-import type { SetlistSlot } from "../hooks/useSetlistEditor";
+import type {
+  SetlistSlot,
+  SetlistSlotAction,
+} from "../hooks/useSetlistEditor";
 import { SetlistBreakControl } from "./SetlistBreakControl";
 import { SetlistSlotRow } from "./SetlistSlotRow";
 import { SongPickerOverlay } from "./SongPickerOverlay";
@@ -36,7 +39,10 @@ type SongSelectStepPanelProps = {
   onKeywordChange: (value: string) => void;
   onMoveSong: (index: number, direction: -1 | 1) => void;
   onOpenSongConfirm: (songId: string) => void;
-  onOpenSongPicker: (slotIndex: number) => void;
+  onOpenSongPicker: (
+    slotIndex: number,
+    action?: SetlistSlotAction,
+  ) => void;
   onPlaceSetlistBreak: (index: number, type: SetlistBreakType) => void;
   onRemoveSong: (index: number) => void;
   onReorderSong: (fromIndex: number, toIndex: number) => void;
@@ -135,6 +141,10 @@ export function SongSelectStepPanel({
     resetSongDrag();
   }
 
+  function getInsertLabel(index: number) {
+    return index === 0 ? "先頭に曲を追加" : "ここに曲を追加";
+  }
+
   return (
     <>
       <section className="relative overflow-hidden border-4 border-black bg-white shadow-[14px_14px_0_#111]">
@@ -161,14 +171,6 @@ export function SongSelectStepPanel({
                 onClick={onBackToGroup}
               >
                 グループ選択へ戻る
-              </button>
-              <button
-                type="button"
-                className="h-11 border-2 border-black bg-black px-4 text-sm font-black tracking-[0.18em] text-white shadow-[5px_5px_0_#e11d48] transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:border-zinc-300 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none"
-                disabled={selectedSongsCount === 0}
-                onClick={onComplete}
-              >
-                完了
               </button>
             </div>
           </div>
@@ -198,58 +200,73 @@ export function SongSelectStepPanel({
             <div className="space-y-4">
               {setlistSlots.map((slot) => (
                 <div
-                  key={`slot-${slot.index}-${slot.song?.id ?? "empty"}`}
+                  key={`slot-${slot.action}-${slot.index}-${slot.song?.id ?? "empty"}`}
                   className="space-y-3"
                 >
-                  <SetlistSlotRow
-                    coverUrl={
-                      slot.song ? (coverUrlBySongId[slot.song.id] ?? null) : null
-                    }
-                    index={slot.index}
-                    isDragging={draggedSongIndex === slot.index}
-                    isDropTarget={dropTargetIndex === slot.index}
-                    song={slot.song}
-                    canMoveDown={slot.index < selectedSongsCount - 1}
-                    canMoveUp={slot.index > 0 && slot.song !== null}
-                    onMoveDown={
-                      slot.song === null
-                        ? undefined
-                        : () => onMoveSong(slot.index, 1)
-                    }
-                    onMoveUp={
-                      slot.song === null
-                        ? undefined
-                        : () => onMoveSong(slot.index, -1)
-                    }
-                    onOpen={() => onOpenSongPicker(slot.index)}
-                    onRemove={
-                      slot.song === null
-                        ? undefined
-                        : () => onRemoveSong(slot.index)
-                    }
-                    onSongDragEnd={resetSongDrag}
-                    onSongDragLeave={() => {
-                      if (dropTargetIndex === slot.index) {
-                        setDropTargetIndex(null);
+                  {slot.action === "insert" ? (
+                    <button
+                      type="button"
+                      className="flex min-h-10 w-full items-center justify-center gap-3 border-2 border-dashed border-zinc-400 bg-white px-4 py-2 text-xs font-black tracking-[0.18em] text-zinc-700 transition hover:border-rose-600 hover:bg-rose-50 hover:text-rose-600"
+                      onClick={() => onOpenSongPicker(slot.index, "insert")}
+                    >
+                      <span aria-hidden="true" className="text-base leading-none">
+                        +
+                      </span>
+                      {getInsertLabel(slot.index)}
+                    </button>
+                  ) : (
+                    <SetlistSlotRow
+                      coverUrl={
+                        slot.song
+                          ? (coverUrlBySongId[slot.song.id] ?? null)
+                          : null
                       }
-                    }}
-                    onSongDragOver={
-                      slot.song === null
-                        ? undefined
-                        : (event) => dragSongOver(event, slot.index)
-                    }
-                    onSongDragStart={
-                      slot.song === null
-                        ? undefined
-                        : (event) => startSongDrag(event, slot.index)
-                    }
-                    onSongDrop={
-                      slot.song === null
-                        ? undefined
-                        : (event) => dropSong(event, slot.index)
-                    }
-                  />
-                  {slot.song ? (
+                      index={slot.index}
+                      isDragging={draggedSongIndex === slot.index}
+                      isDropTarget={dropTargetIndex === slot.index}
+                      song={slot.song}
+                      canMoveDown={slot.index < selectedSongsCount - 1}
+                      canMoveUp={slot.index > 0 && slot.song !== null}
+                      onMoveDown={
+                        slot.song === null
+                          ? undefined
+                          : () => onMoveSong(slot.index, 1)
+                      }
+                      onMoveUp={
+                        slot.song === null
+                          ? undefined
+                          : () => onMoveSong(slot.index, -1)
+                      }
+                      onOpen={() => onOpenSongPicker(slot.index, slot.action)}
+                      onRemove={
+                        slot.song === null
+                          ? undefined
+                          : () => onRemoveSong(slot.index)
+                      }
+                      onSongDragEnd={resetSongDrag}
+                      onSongDragLeave={() => {
+                        if (dropTargetIndex === slot.index) {
+                          setDropTargetIndex(null);
+                        }
+                      }}
+                      onSongDragOver={
+                        slot.song === null
+                          ? undefined
+                          : (event) => dragSongOver(event, slot.index)
+                      }
+                      onSongDragStart={
+                        slot.song === null
+                          ? undefined
+                          : (event) => startSongDrag(event, slot.index)
+                      }
+                      onSongDrop={
+                        slot.song === null
+                          ? undefined
+                          : (event) => dropSong(event, slot.index)
+                      }
+                    />
+                  )}
+                  {slot.action === "replace" && slot.song ? (
                     <SetlistBreakControl
                       index={slot.index}
                       onClear={onClearSetlistBreak}
@@ -261,6 +278,17 @@ export function SongSelectStepPanel({
                   ) : null}
                 </div>
               ))}
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                className="h-12 border-2 border-black bg-black px-6 text-sm font-black tracking-[0.18em] text-white shadow-[5px_5px_0_#e11d48] transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:border-zinc-300 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none"
+                disabled={selectedSongsCount === 0}
+                onClick={onComplete}
+              >
+                完了
+              </button>
             </div>
           </div>
         </div>

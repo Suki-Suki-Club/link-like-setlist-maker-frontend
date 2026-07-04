@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import { GROUP_OPTIONS, GROUP_PREVIEW_SONG_IDS } from "../constants";
-import { useSetlistEditor } from "../hooks/useSetlistEditor";
+import {
+  useSetlistEditor,
+  type SetlistSlotAction,
+} from "../hooks/useSetlistEditor";
 import {
   DEFAULT_SETLIST_TITLE,
   useShareSetlist,
@@ -12,6 +15,7 @@ import { useSharedSetlistLoader } from "../hooks/useSharedSetlistLoader";
 import { useSoundPreferenceSnapshot } from "../hooks/useSoundPreferenceSnapshot";
 import { useSongPreviewController } from "../hooks/useSongPreviewController";
 import { useSongsCatalog } from "../hooks/useSongsCatalog";
+import { createSetlistImageFilename } from "../setlist-image";
 import {
   isSoundEnabled,
   shouldShowSoundPreferencePrompt,
@@ -19,7 +23,6 @@ import {
   writeStoredSoundVolume,
   type SoundPreference,
 } from "../sound-preference";
-import { downloadSetlistImage } from "../setlist-image";
 import type { LoveLiveSeries } from "../types";
 import { isGroupSelectable } from "../utils";
 import { GroupStepPanel } from "./GroupStepPanel";
@@ -33,25 +36,36 @@ type WizardStep = "group" | "songs" | "review";
 export function SetlistMaker({
   readOnlyShareView = false,
   sharedSetlistId,
+  startFresh = false,
 }: {
   readOnlyShareView?: boolean;
   sharedSetlistId?: string;
+  startFresh?: boolean;
 }) {
   const isReadOnlyShareView = readOnlyShareView;
   const [currentStep, setCurrentStep] = useState<WizardStep>(
     isReadOnlyShareView ? "review" : "group",
   );
+  const [setlistTitle, setSetlistTitle] = useState(DEFAULT_SETLIST_TITLE);
   const [imageSaveStatus, setImageSaveStatus] = useState("");
   const [isSavingImage, setIsSavingImage] = useState(false);
-  const [setlistTitle, setSetlistTitle] = useState(DEFAULT_SETLIST_TITLE);
+  const imageCaptureRef = useRef<HTMLDivElement | null>(null);
   const soundPreferenceSnapshot = useSoundPreferenceSnapshot();
-  const { isSongsLoading, setSongsError, songMap, songs, songsError } =
-    useSongsCatalog();
+  const {
+    bootstrapPreviewBySongId,
+    isSongsLoading,
+    loadSongsCatalog,
+    setSongsError,
+    songMap,
+    songs,
+    songsError,
+  } = useSongsCatalog({ autoLoad: isReadOnlyShareView });
   const share = useShareSetlist();
   const editor = useSetlistEditor({
     enableDraftStorage: !isReadOnlyShareView,
     onDirty: share.resetShareState,
     onDraftRestored: () => setCurrentStep("songs"),
+    resetStoredDraftOnLoad: startFresh,
     songMap,
     songs,
   });
@@ -75,9 +89,13 @@ export function SetlistMaker({
     selectedPreviewSongId,
     stopSongHoverPreview,
   } = useSongPreviewController({
+    bootstrapPreviewBySongId,
     canPlaySound,
-    prefetchPreviews: currentStep === "songs" || isReadOnlyShareView,
-    prefetchSongIds: isReadOnlyShareView ? editor.songIds : undefined,
+    prefetchPreviews: currentStep !== "group" || isReadOnlyShareView,
+    prefetchSongIds:
+      currentStep === "review" || isReadOnlyShareView
+        ? editor.songIds
+        : undefined,
     songMap,
     soundVolume,
     songs,
@@ -86,6 +104,9 @@ export function SetlistMaker({
   const isSoundPreferencePromptOpen =
     soundPreferenceSnapshot.isLoaded &&
     shouldShowSoundPreferencePrompt(soundPreferenceSnapshot.preference);
+  const isCatalogBlocking =
+    isSongsLoading ||
+    (isReadOnlyShareView && Boolean(songsError && songs.length === 0));
 
   useSharedSetlistLoader({
     enabled: isReadOnlyShareView,
@@ -110,12 +131,16 @@ export function SetlistMaker({
 
   function changeSetlistTitle(value: string) {
     setSetlistTitle(value);
-    share.resetShareState();
     setImageSaveStatus("");
+    share.resetShareState();
   }
 
   async function saveSetlistImage() {
-    if (editor.selectedSongs.length === 0 || isSavingImage) {
+    if (
+      isSavingImage ||
+      editor.selectedSongs.length === 0 ||
+      !imageCaptureRef.current
+    ) {
       return;
     }
 
@@ -123,14 +148,22 @@ export function SetlistMaker({
     setImageSaveStatus("画像を作成中...");
 
     try {
-      await downloadSetlistImage({
-        selectedGroup: editor.selectedGroup,
-        setlistTitle,
-        songs: editor.selectedSongs,
-        visibleSetlistBreaks: editor.visibleSetlistBreaks,
+      const { toPng } = await import("html-to-image");
+
+      await document.fonts?.ready;
+
+      const dataUrl = await toPng(imageCaptureRef.current, {
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+        pixelRatio: 2,
       });
+      const link = document.createElement("a");
+      link.download = createSetlistImageFilename();
+      link.href = dataUrl;
+      link.click();
       setImageSaveStatus("画像を保存しました");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setImageSaveStatus("画像を保存できませんでした");
     } finally {
       setIsSavingImage(false);
@@ -166,13 +199,21 @@ export function SetlistMaker({
     void playGroupPreview(group);
   }
 
-  function confirmGroupSelection() {
-    if (!editor.pendingGroup) {
+  async function confirmGroupSelection() {
+    const group = editor.pendingGroup;
+
+    if (!group) {
       return;
     }
 
-    editor.chooseGroup(editor.pendingGroup);
     clearPreviewSelection();
+    const didLoadSongs = await loadSongsCatalog(group);
+
+    if (!didLoadSongs) {
+      return;
+    }
+
+    editor.chooseGroup(group);
     setCurrentStep("songs");
   }
 
@@ -182,9 +223,12 @@ export function SetlistMaker({
     setCurrentStep("group");
   }
 
-  function openSongPicker(slotIndex: number) {
+  function openSongPicker(
+    slotIndex: number,
+    action?: SetlistSlotAction,
+  ) {
     clearPreviewSelection();
-    editor.openSongPicker(slotIndex);
+    editor.openSongPicker(slotIndex, action);
   }
 
   function closeSongPicker() {
@@ -248,17 +292,35 @@ export function SetlistMaker({
         volume={soundVolume}
       />
 
-      {currentStep === "group" ? (
-        <GroupStepPanel
-          canConfirmGroupSelection={editor.canConfirmGroupSelection}
-          groupOptions={GROUP_OPTIONS}
-          onConfirm={confirmGroupSelection}
-          onGroupSelect={handleGroupSelect}
-          pendingGroup={editor.pendingGroup}
-        />
+      {isCatalogBlocking ? (
+        <section className="flex min-h-[320px] w-full flex-col items-center justify-center gap-4 text-center">
+          <p className="text-sm font-black tracking-[0.35em] text-rose-600">
+            LOADING
+          </p>
+          <p className="text-2xl font-black text-zinc-950">
+            {isSongsLoading ? "楽曲情報を取得中" : songsError}
+          </p>
+        </section>
       ) : null}
 
-      {currentStep === "songs" ? (
+      {!isCatalogBlocking && currentStep === "group" ? (
+        <>
+          <GroupStepPanel
+            canConfirmGroupSelection={editor.canConfirmGroupSelection}
+            groupOptions={GROUP_OPTIONS}
+            onConfirm={() => void confirmGroupSelection()}
+            onGroupSelect={handleGroupSelect}
+            pendingGroup={editor.pendingGroup}
+          />
+          {songsError ? (
+            <p className="mt-4 text-center text-sm font-bold text-rose-600">
+              {songsError}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+
+      {!isCatalogBlocking && currentStep === "songs" ? (
         <SongSelectStepPanel
           activeSlotIndex={editor.activeSlotIndex}
           coverUrlBySongId={Object.fromEntries(
@@ -308,7 +370,7 @@ export function SetlistMaker({
         />
       ) : null}
 
-      {currentStep === "review" ? (
+      {!isCatalogBlocking && currentStep === "review" ? (
         <ReviewStepPanel
           canSaveShareUrl={canSaveShareUrl}
           coverUrlBySongId={Object.fromEntries(
@@ -318,6 +380,7 @@ export function SetlistMaker({
             ]),
           )}
           hasIssuedShareUrl={share.hasIssuedShareUrl}
+          imageCaptureRef={imageCaptureRef}
           imageSaveStatus={imageSaveStatus}
           isSavingImage={isSavingImage}
           onBackToSongs={() => setCurrentStep("songs")}

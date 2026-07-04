@@ -7,42 +7,50 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  getCachedPreview,
-  isPreviewCacheFresh,
-  readPreviewCache,
-  setCachedPreview,
-  type CachedSongPreview,
-  type SongPreviewStatus,
-} from "../preview-cache";
 import type { Song } from "../types";
 
-type SongPreviewPayload = {
-  coverUrl?: string | null;
-  deezerTrackId?: number;
-  previewUrl?: string | null;
+export type SongMediaStatus = "available" | "unavailable";
+
+export type SongMediaPayload = {
+  albumTitle: string | null;
+  artistName: string;
+  coverUrl: string;
+  deezerTrackId: number;
+  duration: number | null;
+  isrc: string | null;
+  previewUrl: string;
+  rank: number | null;
   title: string;
+  trackLink: string | null;
 };
 
-type SongPreviewResponse = {
-  status: SongPreviewStatus;
-  preview: SongPreviewPayload | null;
+export type SongMediaResponse = {
+  media: SongMediaPayload | null;
+  songId: string;
+  status: SongMediaStatus;
+};
+
+export type CachedSongPreview = {
+  cachedAt: number;
+  coverUrl: string | null;
+  previewUrl: string | null;
+  status: SongMediaStatus;
+  title: string;
 };
 
 type SongPreviewRequestResult = {
   cachedPreview: CachedSongPreview;
   fromCache: boolean;
-  payload: SongPreviewResponse | null;
+  payload: SongMediaResponse | null;
   responseOk: boolean;
 };
 
 type SongPreviewRequestOptions = {
-  backgroundRefresh?: boolean;
-  forceRefresh?: boolean;
   withLoadingState?: boolean;
 };
 
 type UseSongPreviewControllerOptions = {
+  bootstrapPreviewBySongId?: Record<string, CachedSongPreview>;
   canPlaySound: boolean;
   prefetchPreviews: boolean;
   prefetchSongIds?: string[];
@@ -71,7 +79,7 @@ export function mergeCachedSongPreview(
   const coverUrl = next.coverUrl ?? current?.coverUrl ?? null;
   const previewUrl = next.previewUrl ?? current?.previewUrl ?? null;
   const status =
-    next.status === "found" || !current || (!coverUrl && !previewUrl)
+    next.status === "available" || !current || (!coverUrl && !previewUrl)
       ? next.status
       : current.status;
 
@@ -83,23 +91,107 @@ export function mergeCachedSongPreview(
   } satisfies CachedSongPreview;
 }
 
+function isProxiedCoverUrl(coverUrl: string | null | undefined) {
+  return typeof coverUrl === "string" && coverUrl.startsWith("/api/song-media/");
+}
+
+function isProxiedAudioUrl(previewUrl: string | null | undefined) {
+  return typeof previewUrl === "string" && previewUrl.startsWith("/api/song-media/");
+}
+
+function hasDisplayReadyPreview(preview: CachedSongPreview | null | undefined) {
+  if (!preview) {
+    return false;
+  }
+
+  return preview.status === "available"
+    ? isProxiedAudioUrl(preview.previewUrl) &&
+        isProxiedCoverUrl(preview.coverUrl)
+    : true;
+}
+
+function isResolvedForPrefetch(preview: CachedSongPreview | null | undefined) {
+  return hasDisplayReadyPreview(preview);
+}
+
+function mergePreviewRecordsByFreshness(
+  current: Record<string, CachedSongPreview>,
+  incoming: Record<string, CachedSongPreview> | undefined,
+) {
+  if (!incoming || Object.keys(incoming).length === 0) {
+    return current;
+  }
+
+  const next = { ...current };
+
+  for (const [songId, preview] of Object.entries(incoming)) {
+    if (!next[songId] || preview.cachedAt >= next[songId].cachedAt) {
+      next[songId] = preview;
+    }
+  }
+
+  return next;
+}
+
 export function getMissingPreviewSongIds({
   cachedPreviewBySongId,
-  getCachedPreviewBySongId,
+  getFallbackPreviewBySongId,
   songIds,
 }: {
   cachedPreviewBySongId: Record<string, CachedSongPreview>;
-  getCachedPreviewBySongId: (songId: string) => CachedSongPreview | null;
+  getFallbackPreviewBySongId: (songId: string) => CachedSongPreview | null;
   songIds: string[];
 }) {
   return songIds.filter((songId) => {
     const preview =
-      cachedPreviewBySongId[songId] ?? getCachedPreviewBySongId(songId);
-    return !preview?.coverUrl || !preview.previewUrl;
+      cachedPreviewBySongId[songId] ?? getFallbackPreviewBySongId(songId);
+    return !isResolvedForPrefetch(preview);
   });
 }
 
+function getCoverProxyUrl(songId: string) {
+  return `/api/song-media/${encodeURIComponent(songId)}/cover`;
+}
+
+function getAudioProxyUrl(songId: string) {
+  return `/api/song-media/${encodeURIComponent(songId)}/audio`;
+}
+
+function createCachedPreviewFromMediaResponse(
+  songId: string,
+  response: SongMediaResponse,
+  cachedAt: number,
+  getFallbackTitle: (songId: string) => string,
+) {
+  return {
+    cachedAt,
+    coverUrl: response.media?.coverUrl ? getCoverProxyUrl(songId) : null,
+    previewUrl: response.media?.previewUrl ? getAudioProxyUrl(songId) : null,
+    status: response.status,
+    title: response.media?.title ?? getFallbackTitle(songId),
+  } satisfies CachedSongPreview;
+}
+
+export function createCachedPreviewsFromMediaBySongId(
+  mediaBySongId: Record<string, SongMediaResponse>,
+  cachedAt: number,
+  getFallbackTitle: (songId: string) => string,
+) {
+  return Object.fromEntries(
+    Object.entries(mediaBySongId).map(([songId, response]) => [
+      songId,
+      createCachedPreviewFromMediaResponse(
+        songId,
+        response,
+        cachedAt,
+        getFallbackTitle,
+      ),
+    ]),
+  );
+}
+
 export function useSongPreviewController({
+  bootstrapPreviewBySongId,
   canPlaySound,
   prefetchPreviews,
   prefetchSongIds,
@@ -110,9 +202,9 @@ export function useSongPreviewController({
   const [selectedPreviewSongId, setSelectedPreviewSongId] = useState<
     string | null
   >(null);
-  const [previewBySongId, setPreviewBySongId] = useState<
+  const [storedPreviewBySongId, setStoredPreviewBySongId] = useState<
     Record<string, CachedSongPreview>
-  >(() => readPreviewCache());
+  >({});
   const [previewLoadingSongId, setPreviewLoadingSongId] = useState<
     string | null
   >(null);
@@ -127,38 +219,19 @@ export function useSongPreviewController({
   const previewRequestMapRef = useRef<
     Map<string, Promise<SongPreviewRequestResult>>
   >(new Map());
-  canPlaySoundRef.current = canPlaySound;
-  soundVolumeRef.current = soundVolume;
-
-  const prefetchSongPreview = useEffectEvent((songId: string) =>
-    loadSongPreviewForDisplay(songId),
-  );
-
-  useEffect(() => {
-    if (!prefetchPreviews || songs.length === 0) {
-      return;
-    }
-
-    const targetSongIds = prefetchSongIds ?? songs.map((song) => song.id);
-    const missingPreviewSongIds = getMissingPreviewSongIds({
-      cachedPreviewBySongId: previewBySongId,
-      getCachedPreviewBySongId: getCachedPreview,
-      songIds: targetSongIds,
-    });
-
-    if (missingPreviewSongIds.length === 0) {
-      return;
-    }
-
-    void Promise.allSettled(
-      missingPreviewSongIds.map((songId) => prefetchSongPreview(songId)),
-    );
-  }, [prefetchPreviews, prefetchSongIds, previewBySongId, songs]);
 
   const selectedPreviewSong = useMemo(
     () =>
       selectedPreviewSongId ? songMap.get(selectedPreviewSongId) ?? null : null,
     [selectedPreviewSongId, songMap],
+  );
+  const previewBySongId = useMemo(
+    () =>
+      mergePreviewRecordsByFreshness(
+        storedPreviewBySongId,
+        bootstrapPreviewBySongId,
+      ),
+    [bootstrapPreviewBySongId, storedPreviewBySongId],
   );
   const selectedPreview = selectedPreviewSongId
     ? previewBySongId[selectedPreviewSongId] ?? null
@@ -171,89 +244,83 @@ export function useSongPreviewController({
   function getFallbackPreviewTitle(songId: string) {
     return (
       previewBySongId[songId]?.title ??
-      getCachedPreview(songId)?.title ??
       songMap.get(songId)?.title ??
       ""
     );
   }
 
   function cachePreview(songId: string, preview: CachedSongPreview) {
-    const existingPreview = previewBySongId[songId] ?? getCachedPreview(songId);
+    const existingPreview = previewBySongId[songId];
     const nextPreview = mergeCachedSongPreview(existingPreview, preview);
 
-    setPreviewBySongId((current) => ({
+    setStoredPreviewBySongId((current) => ({
       ...current,
       [songId]: mergeCachedSongPreview(current[songId], nextPreview),
     }));
-    setCachedPreview(songId, nextPreview);
     return nextPreview;
   }
 
   function hydrateCachedPreview(songId: string) {
-    const cachedPreview = previewBySongId[songId] ?? getCachedPreview(songId);
-
-    if (!cachedPreview) {
-      return null;
-    }
-
-    if (!previewBySongId[songId]) {
-      setPreviewBySongId((current) => ({
-        ...current,
-        [songId]: cachedPreview,
-      }));
-    }
-
-    return cachedPreview;
+    return previewBySongId[songId] ?? null;
   }
 
-  function createCachedPreview(
-    songId: string,
-    status: SongPreviewStatus,
-    preview: SongPreviewPayload | null,
-  ) {
+  function createUnavailablePreview(songId: string) {
     return {
-      coverUrl: preview?.coverUrl ?? null,
-      previewUrl: preview?.previewUrl ?? null,
-      status,
-      title: preview?.title ?? getFallbackPreviewTitle(songId),
       cachedAt: Date.now(),
+      coverUrl: null,
+      previewUrl: null,
+      status: "unavailable",
+      title: getFallbackPreviewTitle(songId),
     } satisfies CachedSongPreview;
   }
 
-  function createPreviewApiUrl(songId: string, forceRefresh = false) {
-    return `/api/song-previews/${encodeURIComponent(songId)}${forceRefresh ? "?refresh=true" : ""}`;
-  }
-
-  async function fetchSongPreviewAndCache(
+  async function fetchSongMediaAndCache(
     songId: string,
     options?: SongPreviewRequestOptions,
   ) {
-    const requestKey = `${songId}:${options?.forceRefresh ? "refresh" : "default"}`;
-    const existingRequest = previewRequestMapRef.current.get(requestKey);
+    const existingRequest = previewRequestMapRef.current.get(songId);
 
     if (existingRequest) {
+      if (options?.withLoadingState) {
+        return existingRequest.finally(() => {
+          setPreviewLoadingSongId((current) =>
+            current === songId ? null : current,
+          );
+        });
+      }
+
       return existingRequest;
     }
 
     const requestPromise = (async () => {
       try {
         const response = await fetch(
-          createPreviewApiUrl(songId, options?.forceRefresh),
+          `/api/song-media/${encodeURIComponent(songId)}`,
           {
             cache: "no-store",
           },
         );
-        const payload = (await response.json()) as SongPreviewResponse;
+
+        if (!response.ok) {
+          throw new Error("Song media request failed");
+        }
+
+        const payload = (await response.json()) as SongMediaResponse;
         const cachedPreview = cachePreview(
           songId,
-          createCachedPreview(songId, payload.status, payload.preview),
+          createCachedPreviewFromMediaResponse(
+            songId,
+            payload,
+            Date.now(),
+            getFallbackPreviewTitle,
+          ),
         );
 
         return {
           cachedPreview,
           fromCache: false,
           payload,
-          responseOk: response.ok,
+          responseOk: payload.status === "available",
         } satisfies SongPreviewRequestResult;
       } catch {
         const cachedPreview = hydrateCachedPreview(songId);
@@ -263,25 +330,27 @@ export function useSongPreviewController({
             cachedPreview,
             fromCache: true,
             payload: null,
-            responseOk: false,
+            responseOk: cachedPreview.status === "available",
           } satisfies SongPreviewRequestResult;
         }
 
         return {
-          cachedPreview: cachePreview(
-            songId,
-            createCachedPreview(songId, "unavailable", null),
-          ),
+          cachedPreview: cachePreview(songId, createUnavailablePreview(songId)),
           fromCache: false,
           payload: null,
           responseOk: false,
         } satisfies SongPreviewRequestResult;
       } finally {
-        previewRequestMapRef.current.delete(requestKey);
+        previewRequestMapRef.current.delete(songId);
+        if (options?.withLoadingState) {
+          setPreviewLoadingSongId((current) =>
+            current === songId ? null : current,
+          );
+        }
       }
     })();
 
-    previewRequestMapRef.current.set(requestKey, requestPromise);
+    previewRequestMapRef.current.set(songId, requestPromise);
     return requestPromise;
   }
 
@@ -293,39 +362,30 @@ export function useSongPreviewController({
       setPreviewLoadingSongId(songId);
     }
 
-    try {
-      const cachedPreview = !options?.forceRefresh
-        ? hydrateCachedPreview(songId)
-        : null;
+    const cachedPreview = hydrateCachedPreview(songId);
 
-      if (cachedPreview) {
-        if (options?.backgroundRefresh) {
-          void fetchSongPreviewAndCache(songId);
-        }
-
-        return {
-          cachedPreview,
-          fromCache: true,
-          payload: null,
-          responseOk: cachedPreview.status === "found",
-        } satisfies SongPreviewRequestResult;
-      }
-
-      return await fetchSongPreviewAndCache(songId, options);
-    } finally {
+    if (cachedPreview) {
       if (options?.withLoadingState) {
         setPreviewLoadingSongId((current) =>
           current === songId ? null : current,
         );
       }
+
+      return {
+        cachedPreview,
+        fromCache: true,
+        payload: null,
+        responseOk: cachedPreview.status === "available",
+      } satisfies SongPreviewRequestResult;
     }
+
+    return fetchSongMediaAndCache(songId, options);
   }
 
   function loadSongPreviewForDisplay(songId: string) {
-    const cachedPreview = previewBySongId[songId] ?? getCachedPreview(songId);
+    const cachedPreview = previewBySongId[songId];
 
-    if (cachedPreview?.coverUrl && cachedPreview.previewUrl) {
-      hydrateCachedPreview(songId);
+    if (hasDisplayReadyPreview(cachedPreview)) {
       return;
     }
 
@@ -334,13 +394,60 @@ export function useSongPreviewController({
     }
 
     prefetchPreviewRequestSongIdsRef.current.add(songId);
-    void requestSongPreview(songId, {
-      backgroundRefresh: Boolean(cachedPreview),
-      forceRefresh: Boolean(
-        cachedPreview && (!cachedPreview.coverUrl || !cachedPreview.previewUrl),
-      ),
-    });
+    void requestSongPreview(songId);
   }
+
+  async function loadSongPreviewsForDisplay(songIds: string[]) {
+    const missingSongIds = songIds.filter((songId) => {
+      const cachedPreview = previewBySongId[songId];
+      return !isResolvedForPrefetch(cachedPreview);
+    });
+
+    if (missingSongIds.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      missingSongIds.map(async (songId) => {
+        prefetchPreviewRequestSongIdsRef.current.add(songId);
+
+        try {
+          await requestSongPreview(songId);
+        } catch {
+          prefetchPreviewRequestSongIdsRef.current.delete(songId);
+        }
+      }),
+    );
+  }
+
+  const prefetchSongPreviews = useEffectEvent((songIds: string[]) =>
+    loadSongPreviewsForDisplay(songIds),
+  );
+
+  useEffect(() => {
+    if (!prefetchPreviews || songs.length === 0) {
+      return;
+    }
+
+    const targetSongIds = prefetchSongIds ?? songs.map((song) => song.id);
+    const missingPreviewSongIds = getMissingPreviewSongIds({
+      cachedPreviewBySongId: previewBySongId,
+      getFallbackPreviewBySongId: () => null,
+      songIds: targetSongIds,
+    });
+
+    if (missingPreviewSongIds.length === 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void prefetchSongPreviews(missingPreviewSongIds);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [prefetchPreviews, prefetchSongIds, previewBySongId, songs]);
 
   function stopPreviewAudio() {
     const audio = previewAudioRef.current;
@@ -357,12 +464,15 @@ export function useSongPreviewController({
   }
 
   useEffect(() => {
+    canPlaySoundRef.current = canPlaySound;
+
     if (!canPlaySound) {
       stopPreviewAudio();
     }
   }, [canPlaySound]);
 
   useEffect(() => {
+    soundVolumeRef.current = soundVolume;
     const audio = previewAudioRef.current;
 
     if (!audio) {
@@ -429,27 +539,20 @@ export function useSongPreviewController({
     const loop = options?.loop ?? false;
 
     if (cachedPreview?.previewUrl) {
-      const startedFromCache = await tryPlayPreviewUrl(
-        songId,
-        cachedPreview.previewUrl,
-        loop,
-      );
-
-      if (startedFromCache) {
-        void fetchSongPreviewAndCache(songId, {
-          forceRefresh: !isPreviewCacheFresh(cachedPreview.cachedAt),
-        });
-
-        return true;
-      }
+      return tryPlayPreviewUrl(songId, cachedPreview.previewUrl, loop);
     }
 
-    const result = await requestSongPreview(songId, {
-      forceRefresh: Boolean(cachedPreview),
-    });
+    const result = cachedPreview
+      ? {
+          cachedPreview,
+          fromCache: true,
+          payload: null,
+          responseOk: cachedPreview.status === "available",
+        }
+      : await requestSongPreview(songId);
 
     if (
-      result.cachedPreview.status !== "found" ||
+      result.cachedPreview.status !== "available" ||
       !result.cachedPreview.previewUrl
     ) {
       return false;
@@ -475,13 +578,11 @@ export function useSongPreviewController({
     hoverPreviewRequestSongIdRef.current = songId;
 
     try {
-      const previewResult = await requestSongPreview(songId, {
-        backgroundRefresh: true,
-      });
+      const previewResult = await requestSongPreview(songId);
 
       if (
         hoverPreviewRequestSongIdRef.current !== songId ||
-        previewResult.cachedPreview.status !== "found" ||
+        previewResult.cachedPreview.status !== "available" ||
         !canPlaySoundRef.current
       ) {
         return;
@@ -552,14 +653,7 @@ export function useSongPreviewController({
       void playSongPreviewAudio(songId, { loop: true });
     }
 
-    if (previewBySongId[songId]) {
-      void fetchSongPreviewAndCache(songId);
-      return;
-    }
-
-    if (getCachedPreview(songId)) {
-      void requestSongPreview(songId, { backgroundRefresh: true });
-    } else {
+    if (!previewBySongId[songId]) {
       void requestSongPreview(songId, { withLoadingState: true });
     }
   }
