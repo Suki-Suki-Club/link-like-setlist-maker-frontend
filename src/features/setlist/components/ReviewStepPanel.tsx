@@ -1,19 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import type { RefObject } from "react";
 import type { LoveLiveSeries, SetlistBreak, Song } from "../types";
 import { getSharedSetlistFreshCreateAction } from "../hooks/useShareSetlist";
 import { SetlistBreakDivider } from "./SetlistBreakDivider";
 import { ReviewSongRow } from "./ReviewSongRow";
-import { SetlistShareImageCard } from "./SetlistShareImageCard";
 import { ShareCommandPanel } from "./ShareCommandPanel";
 
 type ReviewStepPanelProps = {
   canSaveShareUrl: boolean;
   coverUrlBySongId: Record<string, string | null>;
   hasIssuedShareUrl: boolean;
-  imageCaptureRef: RefObject<HTMLDivElement | null>;
   imageSaveStatus: string;
   isSavingImage: boolean;
   onBackToSongs: () => void;
@@ -36,7 +33,6 @@ export function ReviewStepPanel({
   canSaveShareUrl,
   coverUrlBySongId,
   hasIssuedShareUrl,
-  imageCaptureRef,
   imageSaveStatus,
   isSavingImage,
   onBackToSongs,
@@ -134,22 +130,6 @@ export function ReviewStepPanel({
           shareUrl={shareUrl}
           songCount={selectedSongs.length}
         />
-      )}
-
-      {readOnly ? null : (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none fixed left-[-10000px] top-0 z-[-1]"
-        >
-          <SetlistShareImageCard
-            ref={imageCaptureRef}
-            coverUrlBySongId={coverUrlBySongId}
-            selectedGroup={selectedGroup}
-            selectedSongs={selectedSongs}
-            setlistTitle={setlistTitle}
-            visibleSetlistBreaks={visibleSetlistBreaks}
-          />
-        </div>
       )}
     </section>
   );

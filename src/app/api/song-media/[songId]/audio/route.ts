@@ -1,4 +1,4 @@
-import { fetchSongMedia, type SongMediaResponse } from "../../shared";
+import { fetchSongMedia, fetchWithRetry, type SongMediaResponse } from "../../shared";
 
 type CloudflareFetchInit = RequestInit & {
   cf?: {
@@ -50,7 +50,7 @@ export async function GET(
         cacheTtl: audioCacheTtlSeconds,
       },
     };
-    const upstreamResponse = await fetch(previewUrl, audioRequestInit);
+    const upstreamResponse = await fetchWithRetry(previewUrl, audioRequestInit);
 
     if (!upstreamResponse.ok || !upstreamResponse.body) {
       return Response.json(

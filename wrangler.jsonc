@@ -12,7 +12,7 @@
     }
   ],
   "vars": {
-    "BACKEND_API_BASE_URL": "https://link-like-setlist-maker-backend-846528905316.asia-northeast1.run.app"
+    "BACKEND_API_BASE_URL": "https://api.link-like-setlist-maker.sukisuki.club"
   },
   "assets": {
     "directory": ".open-next/assets",

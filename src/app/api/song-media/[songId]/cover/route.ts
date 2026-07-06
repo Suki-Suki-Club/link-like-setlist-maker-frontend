@@ -1,5 +1,5 @@
 import { matchEdgeCache, putEdgeCache } from "../../../edge-cache";
-import { fetchSongMedia, type SongMediaResponse } from "../../shared";
+import { fetchSongMedia, fetchWithRetry, type SongMediaResponse } from "../../shared";
 
 type CloudflareFetchInit = RequestInit & {
   cf?: {
@@ -53,7 +53,7 @@ export async function GET(
         cacheTtl: coverCacheTtlSeconds,
       },
     };
-    const coverResponse = await fetch(coverUrl, coverRequestInit);
+    const coverResponse = await fetchWithRetry(coverUrl, coverRequestInit);
 
     if (!coverResponse.ok || !coverResponse.body) {
       return createJsonResponse(

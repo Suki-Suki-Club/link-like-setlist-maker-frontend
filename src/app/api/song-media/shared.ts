@@ -40,3 +40,30 @@ export async function fetchSongMedia(songId: string) {
     requestInit,
   );
 }
+
+export async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  retries = 1,
+): Promise<Response> {
+  let lastResponse: Response | undefined;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(url, init);
+      if (response.ok) {
+        return response;
+      }
+      lastResponse = response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastResponse) {
+    return lastResponse;
+  }
+
+  throw lastError;
+}
