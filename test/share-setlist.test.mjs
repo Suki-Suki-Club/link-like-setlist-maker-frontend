@@ -168,7 +168,7 @@ test("X share URL points to the tweet intent with the setlist URL", () => {
   assert.equal(parsedUrl.searchParams.get("url"), null);
   assert.equal(
     parsedUrl.searchParams.get("text"),
-    "My Setlist\nhttps://example.com/shared/setlist-1\n#リンクラセトリメーカー #ラブライブセトリメーカー",
+    "My Setlist\nhttps://example.com/shared/setlist-1\n#リンクライクセトリメーカー #ラブライブセトリメーカー",
   );
 });
 
