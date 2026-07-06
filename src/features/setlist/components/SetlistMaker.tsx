@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { GROUP_OPTIONS, GROUP_PREVIEW_SONG_IDS } from "../constants";
 import {
@@ -15,7 +15,8 @@ import { useSharedSetlistLoader } from "../hooks/useSharedSetlistLoader";
 import { useSoundPreferenceSnapshot } from "../hooks/useSoundPreferenceSnapshot";
 import { useSongPreviewController } from "../hooks/useSongPreviewController";
 import { useSongsCatalog } from "../hooks/useSongsCatalog";
-import { createSetlistImageFilename } from "../setlist-image";
+import { downloadSetlistImage } from "../setlist-image";
+import { readStoredSetlistDraft } from "../setlist-draft";
 import {
   isSoundEnabled,
   shouldShowSoundPreferencePrompt,
@@ -49,7 +50,6 @@ export function SetlistMaker({
   const [setlistTitle, setSetlistTitle] = useState(DEFAULT_SETLIST_TITLE);
   const [imageSaveStatus, setImageSaveStatus] = useState("");
   const [isSavingImage, setIsSavingImage] = useState(false);
-  const imageCaptureRef = useRef<HTMLDivElement | null>(null);
   const soundPreferenceSnapshot = useSoundPreferenceSnapshot();
   const {
     bootstrapPreviewBySongId,
@@ -108,6 +108,23 @@ export function SetlistMaker({
     isSongsLoading ||
     (isReadOnlyShareView && Boolean(songsError && songs.length === 0));
 
+  useEffect(() => {
+    if (isReadOnlyShareView || startFresh || songs.length > 0) {
+      return;
+    }
+
+    const storedDraft = readStoredSetlistDraft();
+
+    if (
+      !storedDraft ||
+      (!storedDraft.selectedGroup && storedDraft.songIds.length === 0)
+    ) {
+      return;
+    }
+
+    void loadSongsCatalog();
+  }, [isReadOnlyShareView, startFresh, songs.length, loadSongsCatalog]);
+
   useSharedSetlistLoader({
     enabled: isReadOnlyShareView,
     onError: setSongsError,
@@ -136,11 +153,7 @@ export function SetlistMaker({
   }
 
   async function saveSetlistImage() {
-    if (
-      isSavingImage ||
-      editor.selectedSongs.length === 0 ||
-      !imageCaptureRef.current
-    ) {
+    if (isSavingImage || editor.selectedSongs.length === 0) {
       return;
     }
 
@@ -148,19 +161,18 @@ export function SetlistMaker({
     setImageSaveStatus("画像を作成中...");
 
     try {
-      const { toPng } = await import("html-to-image");
-
-      await document.fonts?.ready;
-
-      const dataUrl = await toPng(imageCaptureRef.current, {
-        backgroundColor: "#ffffff",
-        cacheBust: true,
-        pixelRatio: 2,
+      await downloadSetlistImage({
+        coverUrlBySongId: Object.fromEntries(
+          Object.entries(previewBySongId).map(([songId, preview]) => [
+            songId,
+            preview.coverUrl,
+          ]),
+        ),
+        selectedGroup: editor.selectedGroup,
+        setlistTitle,
+        songs: editor.selectedSongs,
+        visibleSetlistBreaks: editor.visibleSetlistBreaks,
       });
-      const link = document.createElement("a");
-      link.download = createSetlistImageFilename();
-      link.href = dataUrl;
-      link.click();
       setImageSaveStatus("画像を保存しました");
     } catch (error) {
       console.error(error);
@@ -286,7 +298,8 @@ export function SetlistMaker({
         isVisible={
           soundPreferenceSnapshot.isLoaded &&
           canPlaySound &&
-          !isSoundPreferencePromptOpen
+          !isSoundPreferencePromptOpen &&
+          !(currentStep === "review" && !isReadOnlyShareView)
         }
         onVolumeChange={changeSoundVolume}
         volume={soundVolume}
@@ -385,7 +398,6 @@ export function SetlistMaker({
             ]),
           )}
           hasIssuedShareUrl={share.hasIssuedShareUrl}
-          imageCaptureRef={imageCaptureRef}
           imageSaveStatus={imageSaveStatus}
           isSavingImage={isSavingImage}
           onBackToSongs={() => setCurrentStep("songs")}

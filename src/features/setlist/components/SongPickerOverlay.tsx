@@ -72,11 +72,11 @@ export function SongPickerOverlay({
           </button>
         </div>
 
-        <div className="relative z-10 grid gap-4 border-b-4 border-black bg-white px-4 py-4 sm:grid-cols-2 sm:px-8">
-          <label className="grid gap-1 text-xs font-black tracking-[0.16em] text-zinc-700">
+        <div className="relative z-10 grid grid-cols-2 gap-2 border-b-4 border-black bg-white px-4 py-2 sm:gap-4 sm:px-8 sm:py-4">
+          <label className="grid gap-0.5 text-[10px] font-black tracking-[0.12em] text-zinc-700 sm:gap-1 sm:text-xs sm:tracking-[0.16em]">
             UNIT FILTER
             <select
-              className="h-12 border-2 border-black bg-white px-3 text-sm font-bold text-zinc-950 outline-none focus:border-rose-600"
+              className="h-9 border-2 border-black bg-white px-2 text-xs font-bold text-zinc-950 outline-none focus:border-rose-600 sm:h-12 sm:px-3 sm:text-sm"
               value={selectedUnit}
               onChange={(event) => onUnitChange(event.target.value)}
             >
@@ -87,10 +87,10 @@ export function SongPickerOverlay({
               ))}
             </select>
           </label>
-          <label className="grid gap-1 text-xs font-black tracking-[0.16em] text-zinc-700">
+          <label className="grid gap-0.5 text-[10px] font-black tracking-[0.12em] text-zinc-700 sm:gap-1 sm:text-xs sm:tracking-[0.16em]">
             KEYWORD
             <input
-              className="h-12 border-2 border-black bg-white px-3 text-sm font-bold text-zinc-950 outline-none placeholder:text-zinc-400 focus:border-rose-600"
+              className="h-9 border-2 border-black bg-white px-2 text-xs font-bold text-zinc-950 outline-none placeholder:text-zinc-400 focus:border-rose-600 sm:h-12 sm:px-3 sm:text-sm"
               value={keyword}
               onChange={(event) => onKeywordChange(event.target.value)}
               placeholder="曲名・ユニット・タグ"
@@ -98,7 +98,7 @@ export function SongPickerOverlay({
           </label>
         </div>
 
-        <div className="relative z-10 min-h-0 flex-1 overflow-y-auto bg-white px-4 py-4 sm:px-8 sm:py-6">
+        <div className="relative z-10 min-h-0 flex-1 overflow-y-auto bg-white px-4 py-3 sm:px-8 sm:py-6">
           {isLoading ? (
             <div className="border-2 border-dashed border-black bg-zinc-100 px-6 py-10 text-center text-sm font-bold tracking-[0.14em] text-zinc-500">
               楽曲情報を読み込み中...

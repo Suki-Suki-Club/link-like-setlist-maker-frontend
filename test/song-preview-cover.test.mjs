@@ -9,7 +9,7 @@ const sourcePath = new URL(
   import.meta.url,
 );
 
-function loadCoverRouteModule({ fetchSongMedia, fetch }) {
+function loadCoverRouteModule({ fetchSongMedia, fetch, fetchWithRetry }) {
   const source = readFileSync(sourcePath, "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -25,7 +25,10 @@ function loadCoverRouteModule({ fetchSongMedia, fetch }) {
     Response,
     require(specifier) {
       if (specifier === "../../shared") {
-        return { fetchSongMedia };
+        return {
+          fetchSongMedia,
+          fetchWithRetry: fetchWithRetry ?? ((url, init) => fetch(url, init)),
+        };
       }
 
       if (specifier === "../../../edge-cache") {

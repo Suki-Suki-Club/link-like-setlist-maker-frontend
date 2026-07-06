@@ -117,6 +117,8 @@ export function useShareSetlist() {
       return;
     }
 
+    let nextShareUrl: string;
+
     try {
       const response = await fetch("/api/setlists", {
         body: JSON.stringify(createSetlistSavePayload(prediction, setlistTitle)),
@@ -133,19 +135,32 @@ export function useShareSetlist() {
       }
 
       const nextSharePath = createSharePath(payload.setlist.id);
-      const nextShareUrl = origin ? `${origin}${nextSharePath}` : nextSharePath;
+      nextShareUrl = origin ? `${origin}${nextSharePath}` : nextSharePath;
 
       setIssuedSharePath(nextSharePath);
       setHasIssuedShareUrl(true);
-      try {
-        await navigator.clipboard.writeText(nextShareUrl);
-        setShareStatus("保存しました。共有URLをコピーしました");
-      } catch {
-        window.prompt("共有URL", nextShareUrl);
-        setShareStatus("保存しました。共有URLを表示しました");
-      }
-    } catch {
+    } catch (error) {
+      console.error(error);
       setShareStatus("共有URLを発行できませんでした");
+      return;
+    }
+
+    // The setlist is already saved at this point, so a clipboard/prompt
+    // failure here (e.g. iOS Safari's stricter clipboard permission timing)
+    // must not be reported as a save failure.
+    try {
+      await navigator.clipboard.writeText(nextShareUrl);
+      setShareStatus("保存しました。共有URLをコピーしました");
+    } catch (error) {
+      console.error(error);
+
+      try {
+        window.prompt("共有URL", nextShareUrl);
+      } catch (promptError) {
+        console.error(promptError);
+      }
+
+      setShareStatus("保存しました。共有URLを表示しました");
     }
   }
 

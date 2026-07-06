@@ -20,7 +20,7 @@ export function SoundVolumeControl({
   const volumePercent = Math.round(volume * 100);
 
   return (
-    <aside className="fixed bottom-3 right-3 z-50 text-left sm:bottom-auto sm:right-4 sm:top-4">
+    <aside className="fixed bottom-3 left-3 z-50 text-left sm:bottom-auto sm:left-auto sm:right-4 sm:top-4">
       <div className="grid grid-cols-[34px_64px_34px] overflow-hidden border-2 border-black bg-white shadow-[4px_4px_0_#111]">
         <button
           type="button"
