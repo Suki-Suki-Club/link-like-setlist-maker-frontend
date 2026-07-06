@@ -60,7 +60,7 @@ export function createXShareUrl(shareUrl: string, setlistTitle: string) {
     return "";
   }
 
-  const text = `${setlistTitle.trim() || DEFAULT_SETLIST_TITLE}\n${shareUrl}\n#リンクライクセトリメーカー #ラブライブセトリメーカー`;
+  const text = `${setlistTitle.trim() || DEFAULT_SETLIST_TITLE}\n${shareUrl}\n#リンクライクセトリメーカー #ラブライブセトリメーカー #Myセトリメーカー`;
 
   return `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
 }
