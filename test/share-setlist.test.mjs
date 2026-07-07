@@ -155,11 +155,12 @@ test("share URL save button reflects issued state", () => {
 test("X share URL points to the tweet intent with the setlist URL", () => {
   const { createXShareUrl } = loadShareSetlistModule();
 
-  assert.equal(createXShareUrl("", "My Setlist"), "");
+  assert.equal(createXShareUrl("", "My Setlist", "蓮ノ空"), "");
 
   const shareUrl = createXShareUrl(
     "https://example.com/shared/setlist-1",
     "My Setlist",
+    "蓮ノ空",
   );
   const parsedUrl = new URL(shareUrl);
 
@@ -168,7 +169,23 @@ test("X share URL points to the tweet intent with the setlist URL", () => {
   assert.equal(parsedUrl.searchParams.get("url"), null);
   assert.equal(
     parsedUrl.searchParams.get("text"),
-    "My Setlist\nhttps://example.com/shared/setlist-1\n#リンクライクセトリメーカー #ラブライブセトリメーカー #Myセトリメーカー",
+    "My Setlist\nhttps://example.com/shared/setlist-1\n#Myセトリメーカー #蓮ノ空セトリメーカー",
+  );
+});
+
+test("X share URL falls back to the My Setlist hashtag when no group is selected", () => {
+  const { createXShareUrl } = loadShareSetlistModule();
+
+  const shareUrl = createXShareUrl(
+    "https://example.com/shared/setlist-1",
+    "My Setlist",
+    null,
+  );
+  const parsedUrl = new URL(shareUrl);
+
+  assert.equal(
+    parsedUrl.searchParams.get("text"),
+    "My Setlist\nhttps://example.com/shared/setlist-1\n#Myセトリメーカー",
   );
 });
 
