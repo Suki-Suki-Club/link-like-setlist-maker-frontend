@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import type { SetlistPrediction } from "../types";
+import type { LoveLiveSeries, SetlistPrediction } from "../types";
 import { createSharePath } from "../utils";
 
 type BackendSetlistResponse = {
@@ -55,12 +55,22 @@ export function getShareSaveButtonLabel(hasIssuedShareUrl: boolean) {
   return hasIssuedShareUrl ? "保存済み" : "保存してURLをコピー";
 }
 
-export function createXShareUrl(shareUrl: string, setlistTitle: string) {
+export function createXShareHashtags(selectedGroup: LoveLiveSeries | null) {
+  return selectedGroup
+    ? `#Myセトリメーカー #${selectedGroup}セトリメーカー`
+    : "#Myセトリメーカー";
+}
+
+export function createXShareUrl(
+  shareUrl: string,
+  setlistTitle: string,
+  selectedGroup: LoveLiveSeries | null,
+) {
   if (!shareUrl) {
     return "";
   }
 
-  const text = `${setlistTitle.trim() || DEFAULT_SETLIST_TITLE}\n${shareUrl}\n#リンクライクセトリメーカー #ラブライブセトリメーカー #Myセトリメーカー`;
+  const text = `${setlistTitle.trim() || DEFAULT_SETLIST_TITLE}\n${shareUrl}\n${createXShareHashtags(selectedGroup)}`;
 
   return `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
 }

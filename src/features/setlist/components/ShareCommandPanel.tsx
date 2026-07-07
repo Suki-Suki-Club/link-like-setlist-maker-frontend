@@ -39,7 +39,7 @@ export function ShareCommandPanel({
   shareUrl,
   songCount,
 }: ShareCommandPanelProps) {
-  const xShareUrl = createXShareUrl(shareUrl, setlistTitle);
+  const xShareUrl = createXShareUrl(shareUrl, setlistTitle, selectedGroup);
 
   return (
     <div className="relative z-10 border-t-4 border-black bg-white px-4 py-5 sm:px-8">
