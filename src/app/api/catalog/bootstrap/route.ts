@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { backendApiBaseUrl, createBackendHeaders } from "../../backend";
 import { matchEdgeCache, putEdgeCache } from "../../edge-cache";
+import { toFrontendSong, type BackendSong } from "../../series";
 
 type CloudflareFetchInit = RequestInit & {
   cf?: {
@@ -10,20 +11,6 @@ type CloudflareFetchInit = RequestInit & {
 };
 
 const catalogBootstrapCacheTtlSeconds = 5 * 60;
-
-type BackendSong = {
-  id: string;
-  title: string;
-  titleJa: string | null;
-  unitId: string;
-  sortOrder: number;
-  releaseDate: string | null;
-  unit: {
-    id: string;
-    name: string;
-    sortOrder: number;
-  };
-};
 
 type BackendCatalogBootstrapResponse = {
   mediaBySongId?: Record<
@@ -57,20 +44,6 @@ function createJsonResponse(
     headers,
     status,
   });
-}
-
-function toFrontendSong(song: BackendSong) {
-  return {
-    id: song.id,
-    releaseDate: song.releaseDate,
-    series: "蓮ノ空" as const,
-    sortOrder: song.sortOrder,
-    tags: [],
-    title: song.titleJa?.trim() || song.title,
-    titleJa: song.titleJa,
-    unit: song.unit.name,
-    unitId: song.unitId,
-  };
 }
 
 export async function GET(request: Request) {

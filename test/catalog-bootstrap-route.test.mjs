@@ -8,6 +8,25 @@ const sourcePath = new URL(
   "../src/app/api/catalog/bootstrap/route.ts",
   import.meta.url,
 );
+const seriesSourcePath = new URL("../src/app/api/series.ts", import.meta.url);
+
+function loadSeriesModule() {
+  const source = readFileSync(seriesSourcePath, "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+  });
+  const exports = {};
+  const context = vm.createContext({
+    exports,
+    module: { exports },
+  });
+
+  vm.runInContext(compiled.outputText, context);
+  return context.module.exports;
+}
 
 function loadCatalogBootstrapRouteModule({ fetch }) {
   const source = readFileSync(sourcePath, "utf8");
@@ -37,6 +56,10 @@ function loadCatalogBootstrapRouteModule({ fetch }) {
           backendApiBaseUrl: "https://backend.example.test",
           createBackendHeaders: () => ({}),
         };
+      }
+
+      if (specifier === "../../series") {
+        return loadSeriesModule();
       }
 
       if (specifier === "../../edge-cache") {

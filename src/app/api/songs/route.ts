@@ -1,19 +1,6 @@
 import { NextResponse } from "next/server";
 import { backendApiBaseUrl, createBackendHeaders } from "../backend";
-
-type BackendSong = {
-  id: string;
-  title: string;
-  titleJa: string | null;
-  unitId: string;
-  sortOrder: number;
-  releaseDate: string | null;
-  unit: {
-    id: string;
-    name: string;
-    sortOrder: number;
-  };
-};
+import { toFrontendSong, type BackendSong } from "../series";
 
 type BackendSongsResponse = {
   songs: BackendSong[];
@@ -32,17 +19,7 @@ export async function GET() {
       return NextResponse.json(body, { status: response.status });
     }
 
-    const songs = (body as BackendSongsResponse).songs.map((song) => ({
-      id: song.id,
-      releaseDate: song.releaseDate,
-      series: "蓮ノ空" as const,
-      sortOrder: song.sortOrder,
-      tags: [],
-      title: song.titleJa?.trim() || song.title,
-      titleJa: song.titleJa,
-      unit: song.unit.name,
-      unitId: song.unitId,
-    }));
+    const songs = (body as BackendSongsResponse).songs.map(toFrontendSong);
 
     return NextResponse.json({ songs }, { status: 200 });
   } catch {
